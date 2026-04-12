@@ -1,0 +1,61 @@
+services:
+  # PostgreSQL (Conduktor 메타데이터 저장용)
+  postgresql:
+    image: postgres:14
+    container_name: conduktor-postgresql
+    environment:
+      POSTGRES_USER: conduktor
+      POSTGRES_PASSWORD: conduktor_password
+      POSTGRES_DB: conduktor
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgresql_data:/var/lib/postgresql/data
+    networks:
+      - conduktor-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U conduktor -d conduktor"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Conduktor Platform
+  conduktor-platform:
+    image: conduktor/conduktor-platform:latest
+    container_name: conduktor-platform
+    depends_on:
+      postgresql:
+        condition: service_healthy
+    ports:
+      - "38080:8080"
+    environment:
+      CDK_DATABASE_URL: "postgresql://conduktor:conduktor_password@postgresql:5432/conduktor"
+      CDK_LISTENING_PORT: 8080
+      # 조직 이름 설정
+      CDK_ORGANIZATION_NAME: "MyOrganization"
+      # 관리자 이메일 (첫 로그인 시 사용)
+      CDK_ADMIN_EMAIL: "admin@skala.com"
+      # 관리자 비밀번호
+      CDK_ADMIN_PASSWORD: "admin"
+      # Kafka 클러스터 설정 (kafka-net 내부 통신)
+      CDK_CLUSTERS_0_ID: "local"
+      CDK_CLUSTERS_0_NAME: "local-kafka"
+      CDK_CLUSTERS_0_BOOTSTRAPSERVERS: "kafka:9092"
+    networks:
+      - conduktor-network
+      - kafka-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  conduktor-network:
+    driver: bridge
+  kafka-net:
+    external: true
+
+volumes:
+  postgresql_data:
+    driver: local

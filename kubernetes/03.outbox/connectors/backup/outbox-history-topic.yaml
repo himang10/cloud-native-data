@@ -1,0 +1,15 @@
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaTopic
+metadata:
+  name: dbhistory.outbox-source-server
+  namespace: kafka
+  labels:
+    strimzi.io/cluster: my-kafka-cluster
+spec:
+  partitions: 1
+  replicas: 1
+  config:
+    cleanup.policy: compact
+    min.cleanable.dirty.ratio: 0.01
+    segment.ms: 86400000
+

@@ -1,0 +1,62 @@
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaConnector
+metadata:
+  name: mariadb-source-cdc-connector-v1.0.3
+  namespace: kafka
+  labels:
+    strimzi.io/cluster: debezium-source-connect
+
+spec:
+  class: io.debezium.connector.mysql.MySqlConnector
+  tasksMax: 1
+  
+  config:
+    # 데이터베이스 연결 설정
+    database.hostname: mariadb-1.kafka.svc.cluster.local
+    database.port: "3306"
+    database.user: skala
+    database.password: Skala25a!23$
+    database.connectionTimeZone: Asia/Seoul
+    connect.timeout.ms: "30000"
+    
+    # 데이터베이스 서버 설정
+    database.server.id: "184054"
+    topic.prefix: mariadb-cdc
+    
+    # 캡처 대상 설정
+    database.include.list: cloud
+    table.include.list: cloud.users,cloud.orders,cloud.products
+    include.schema.changes: "false"
+    
+    # 스냅샷 설정
+    snapshot.mode: initial
+    snapshot.locking.mode: minimal
+    
+    # 스키마 히스토리 설정
+    schema.history.internal.kafka.bootstrap.servers: my-kafka-cluster-kafka-bootstrap:9092
+    schema.history.internal.kafka.topic: mariadb-schema-changes-v3
+
+    # 히스토리/DDL 처리 관련 (Debezium 3.x)
+    schema.history.internal.store.only.captured.tables.ddl: "true"
+    schema.history.internal.skip.unparseable.ddl: "true"
+    
+    # 토픽 설정
+    topic.creation.default.partitions: "3"
+    topic.creation.default.replication.factor: "1"
+    
+    # 성능 튜닝 설정
+    max.batch.size: "2048"
+    max.queue.size: "8192"
+    poll.interval.ms: "1000"
+    
+    # 에러 처리 설정
+    errors.tolerance: none
+    errors.log.enable: "true"
+    errors.log.include.messages: "true"
+    
+    # Transform 설정
+    #transforms: unwrap
+    #transforms.unwrap.type: io.debezium.transforms.ExtractNewRecordState
+    #transforms.unwrap.add.fields: op,ts_ms,db,table
+    #transforms.unwrap.drop.tombstones: false
+    #transforms.unwrap.delete.handling.mode: none

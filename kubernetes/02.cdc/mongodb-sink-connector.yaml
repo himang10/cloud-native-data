@@ -1,0 +1,53 @@
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaConnector
+metadata:
+  name: mongodb-sink-cdc-connector-v1.0.0
+  namespace: kafka
+  labels:
+    strimzi.io/cluster: jdbc-sink-connect
+
+spec:
+  # 사용 가능한 클래스: io.debezium.connector.mongodb.MongoDbSinkConnector (Debezium 3.x)
+  # com.mongodb.kafka.connect.MongoSinkConnector 는 이 환경에 설치되어 있지 않음
+  class: io.debezium.connector.mongodb.MongoDbSinkConnector
+  tasksMax: 1
+
+  config:
+    # 토픽 설정
+    topics.regex: mariadb-cdc\.cloud\.(users|orders|products)
+
+    # MongoDB 연결 설정 (Debezium MongoDB Sink는 mongodb.connection.string 사용)
+    # skala 계정은 cloud DB에 생성되므로 authSource=cloud 사용
+    mongodb.connection.string: mongodb://skala:Skala25a%2123%24@mongodb-1:27017/?authSource=cloud
+    # 대상 데이터베이스 (Debezium MongoDB Sink는 sink.database 사용)
+    sink.database: cloud
+    # 컬렉션명: RegexRouter transform으로 mariadb-cdc.cloud.users → cdc_users 매핑
+    collection.name.format: "${topic}"
+
+    # [Transform 설명]
+    # MongoDbSinkConnector는 Debezium CDC Envelope(before/after/op)을 내부적으로 직접 파싱:
+    #   op=c/u → after 값만 추출하여 insertOne/replaceOne
+    #   op=d   → before 키로 deleteOne
+    # route: 토픽명 변환만 담당 (mariadb-cdc.cloud.users → cdc_users)
+    transforms: route
+    transforms.route.type: org.apache.kafka.connect.transforms.RegexRouter
+    transforms.route.regex: "mariadb-cdc\\.cloud\\.(.*)"
+    transforms.route.replacement: "cdc_$1"
+
+    # 컨버터 설정
+    key.converter: org.apache.kafka.connect.json.JsonConverter
+    key.converter.schemas.enable: true
+    value.converter: org.apache.kafka.connect.json.JsonConverter
+    value.converter.schemas.enable: true
+
+    # 에러 처리 설정
+    errors.tolerance: all
+    errors.log.enable: true
+    errors.log.include.messages: true
+    errors.retry.delay.max.ms: 60000
+    errors.retry.timeout: 300000
+
+    # Dead Letter Queue 설정
+    errors.deadletterqueue.topic.name: dlq-mongodb-sink
+    errors.deadletterqueue.topic.replication.factor: 1
+    errors.deadletterqueue.context.headers.enable: true

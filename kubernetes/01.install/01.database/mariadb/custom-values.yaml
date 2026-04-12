@@ -1,0 +1,217 @@
+# MariaDB Helm Chart values.yaml 구성 (Debezium CDC 지원)
+## 전역 설정
+global:
+  storageClass: "gp3"
+  security:
+    allowInsecureImages: true
+
+## 이미지 설정
+image:
+  registry: docker.io
+  repository: bitnamilegacy/mariadb
+  tag: "11.4.6-debian-12-r0"
+  pullPolicy: IfNotPresent
+
+## MariaDB 기본 설정
+auth:
+  rootPassword: "Skala25a!23$"
+  database: "cloud"
+  username: "skala"
+  password: "Skala25a!23$"
+  replicationUser: "skala"
+  replicationPassword: "Skala25a!23$"
+
+## Primary 인스턴스 설정 (중요!)
+primary:
+  # 리소스 설정
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+    requests:
+      cpu: 500m
+      memory: 512Mi
+  
+  # 퍼시스턴트 볼륨 설정
+  persistence:
+    enabled: true
+    storageClass: "gp3"
+    accessModes:
+      - ReadWriteOnce
+    size: 20Gi
+  
+  # 서비스 설정
+  service:
+    type: ClusterIP
+    ports:
+      mysql: 3306
+  
+  # 중요: Primary 전용 설정 (Debezium CDC 필수)
+  configuration: |
+    [mysqld]
+    skip-name-resolve
+    explicit_defaults_for_timestamp
+    basedir=/opt/bitnami/mariadb
+    plugin_dir=/opt/bitnami/mariadb/plugin
+    port=3306
+    socket=/opt/bitnami/mariadb/tmp/mysql.sock
+    tmpdir=/opt/bitnami/mariadb/tmp
+    max_allowed_packet=16M
+    bind-address=*
+    pid-file=/opt/bitnami/mariadb/tmp/mysqld.pid
+    log-error=/opt/bitnami/mariadb/logs/mysqld.log
+    character-set-server=UTF8
+    collation-server=utf8_general_ci
+    slow_query_log=0
+    long_query_time=10.0
+    
+    # ==========================================
+    # Debezium CDC를 위한 Binlog 설정
+    # ==========================================
+    
+    # 필수: Binlog 활성화
+    log-bin=mysql-bin
+    
+    # 필수: Row 기반 복제 형식
+    binlog-format=ROW
+    
+    # 필수: 전체 행 이미지 기록
+    binlog-row-image=FULL
+    
+    # 필수: 고유한 서버 ID
+    server-id=1
+    
+    # 권장: Binlog 보존 기간 (일 단위)
+    expire-logs-days=7
+    
+    # 권장: Binlog 최대 파일 크기
+    max-binlog-size=100M
+    
+    # 선택: Binlog 캐시 크기
+    binlog-cache-size=32K
+    
+    # 선택: 트랜잭션 격리 수준
+    transaction-isolation=READ-COMMITTED
+    
+    # 권장: 동기화 설정
+    sync-binlog=1
+    
+    # ==========================================
+    
+    [client]
+    port=3306
+    socket=/opt/bitnami/mariadb/tmp/mysql.sock
+    default-character-set=UTF8
+    plugin_dir=/opt/bitnami/mariadb/plugin
+    
+    [manager]
+    port=3306
+    socket=/opt/bitnami/mariadb/tmp/mysql.sock
+    pid-file=/opt/bitnami/mariadb/tmp/mysqld.pid
+
+## Secondary 인스턴스 설정
+secondary:
+  replicaCount: 0  # Standalone 모드이므로 0
+
+## 아키텍처 설정
+architecture: standalone
+
+## 메트릭 설정 (Prometheus 연동 강화)
+metrics:
+  enabled: true
+  image:
+    registry: docker.io
+    repository: bitnamilegacy/mysqld-exporter
+    tag: "0.15.1-debian-12-r28"
+    pullPolicy: IfNotPresent
+  resources:
+    limits:
+      cpu: 100m
+      memory: 128Mi
+    requests:
+      cpu: 50m
+      memory: 64Mi
+  # ServiceMonitor 활성화 (Prometheus가 MariaDB 메트릭 수집)
+  # 주의: ServiceMonitor CRD가 설치된 후 enabled: true로 변경
+  serviceMonitor:
+    enabled: false
+    namespace: mariadb
+    labels:
+      app: mariadb
+      prometheus: kube-prometheus
+  prometheusRule:
+    enabled: false
+  # 추가 메트릭 라벨
+  extraLabels:
+    app: mariadb
+    component: database
+
+## 볼륨 권한 설정
+volumePermissions:
+  enabled: true
+  image:
+    registry: docker.io
+    repository: bitnamilegacy/os-shell
+    tag: "12-debian-12-r43"
+    pullPolicy: IfNotPresent
+  resources:
+    limits:
+      cpu: 100m
+      memory: 128Mi
+    requests:
+      cpu: 50m
+      memory: 64Mi
+
+## 초기화 스크립트 - Debezium 사용자 생성
+initdbScripts:
+  setup_debezium_user.sql: |
+    -- Debezium CDC 전용 사용자 생성
+    CREATE USER IF NOT EXISTS 'skala'@'%' IDENTIFIED BY 'Skala25a!23$';
+    
+    -- Debezium 필수 권한 부여
+    GRANT SELECT, RELOAD, SHOW DATABASES, REPLICATION SLAVE, REPLICATION CLIENT 
+    ON *.* TO 'skala'@'%';
+    
+    -- 권한 확인
+    SHOW GRANTS FOR 'skala'@'%';
+
+    -- 특정 데이터베이스에 대한 추가 권한
+    GRANT ALL PRIVILEGES ON cloud.* TO 'skala'@'%';
+    
+    -- 변경사항 적용
+    FLUSH PRIVILEGES;
+
+## 네트워크 정책
+networkPolicy:
+  enabled: false
+  allowExternal: true
+
+## 보안 컨텍스트
+podSecurityContext:
+  enabled: true
+  fsGroup: 1001
+
+containerSecurityContext:
+  enabled: true
+  runAsUser: 1001
+  runAsNonRoot: true
+
+## 환경 변수 (OpenTelemetry 지원 추가)
+extraEnvVars:
+  - name: MARIADB_EXTRA_FLAGS
+    value: "--log-bin=mysql-bin --binlog-format=ROW --server-id=1"
+  # OpenTelemetry 환경변수 (MariaDB Pod에 Beyla 적용을 위한 라벨링)
+  - name: OTEL_SERVICE_NAME
+    value: "mariadb"
+  - name: OTEL_SERVICE_VERSION
+    value: "11.4.6"
+  - name: OTEL_RESOURCE_ATTRIBUTES
+    value: "service.name=mariadb,service.namespace=mariadb,service.version=11.4.6,database.type=mariadb"
+
+## 추가: Pod 라벨 설정 (Beyla가 감지할 수 있도록)
+commonLabels:
+  app: mariadb
+  component: database
+  observability: enabled
+
+

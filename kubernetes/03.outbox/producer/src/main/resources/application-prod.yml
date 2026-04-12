@@ -1,0 +1,43 @@
+# 프로덕션 환경 설정
+
+spring:
+  config:
+    activate:
+      on-profile: prod
+
+  # 프로덕션 DB 설정 (환경 변수 사용)
+  datasource:
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+    hikari:
+      maximum-pool-size: ${HIKARI_MAX_POOL_SIZE:20}
+      minimum-idle: ${HIKARI_MIN_IDLE:10}
+
+  # 프로덕션에서는 SQL 로그 비활성화
+  jpa:
+    show-sql: false
+    properties:
+      hibernate:
+        '[format_sql]': false
+
+# 프로덕션에서는 적절한 로그 레벨만 출력
+logging:
+  level:
+    root: INFO
+    '[com.example.producer]': INFO
+    '[org.hibernate.SQL]': WARN
+    '[org.hibernate.type.descriptor.sql.BasicBinder]': OFF
+  file:
+    name: ${LOG_FILE_PATH:/var/log/outbox-producer/application.log}
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %5p [%t] %-40.40logger{39} : %m%n"
+
+# 프로덕션 헬스체크 설정
+management:
+  endpoint:
+    health:
+      show-details: never  # 보안을 위해 상세 정보 숨김
+  health:
+    db:
+      enabled: true

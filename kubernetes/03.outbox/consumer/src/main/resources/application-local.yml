@@ -1,0 +1,76 @@
+spring:
+  application:
+    name: outbox-consumer
+
+  # 데이터베이스 설정 (PostgreSQL)
+  datasource:
+    url: jdbc:postgresql://localhost:5432/cloud?tcpKeepAlive=true&socketTimeout=30&connectTimeout=30
+    username: postgres
+    password: postgres
+    driver-class-name: org.postgresql.Driver
+    
+    # HikariCP 커넥션 풀 설정
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      connection-test-query: SELECT 1
+  
+  # JPA 설정
+  jpa:
+    hibernate:
+      ddl-auto: update  # 자동으로 테이블 생성/업데이트
+    show-sql: true
+    properties:
+      hibernate:
+        "[format_sql]": true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        jdbc:
+          "[time_zone]": UTC
+  
+  # Kafka 설정 (Debezium Outbox Event 처리용)
+  kafka:
+    bootstrap-servers: k8s-kafka-mykafkac-b9fecf9b07-95f6489e928361c3.elb.ap-northeast-2.amazonaws.com:9094
+    
+    consumer:
+      group-id: outbox-consumer-group
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      max-poll-records: 100
+      properties:
+        "[session.timeout.ms]": 30000
+        "[heartbeat.interval.ms]": 10000
+        "[partition.assignment.strategy]": org.apache.kafka.clients.consumer.CooperativeStickyAssignor
+        "[group.instance.id]": ${HOSTNAME:local-consumer}
+    
+    listener:
+      ack-mode: manual
+      concurrency: 3
+
+# 서버 설정
+server:
+  port: 8082
+  shutdown: graceful
+
+# 관리 엔드포인트 설정
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+  health:
+    db:
+      enabled: true
+
+logging:
+  level:
+    root: INFO
+    "[com.example.consumer]": DEBUG
+    "[org.springframework.kafka]": INFO

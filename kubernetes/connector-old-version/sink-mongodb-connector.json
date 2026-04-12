@@ -1,0 +1,21 @@
+{
+  "name": "mongo-sink-eventsource",
+  "config": {
+    "connector.class": "com.mongodb.kafka.connect.MongoSinkConnector",
+    "connection.uri": "mongodb://root:ywyi1004@a63573d6e6aa5479a9e65536e827e174-823303d80e2c5621.elb.ap-northeast-2.amazonaws.com:27017/?authSource=admin",
+    "database": "mydev-db",
+    "collection": "OutboxEvent",
+    "topics.regex": "outbox.event.(.*)",
+    "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "value.converter.schemas.enable": "false",
+    "tombstones.on.delete" : "true",
+    "transforms": "ReplaceField,RenameField,InsertField",
+    "transforms.ReplaceField.type" : "org.apache.kafka.connect.transforms.ReplaceField$Value",
+    "transforms.ReplaceField.blacklist" : "",
+    "transforms.RenameField.type" : "org.apache.kafka.connect.transforms.ReplaceField$Value",
+    "transforms.RenameField.renames" : "",
+    "transforms.InsertField.type" : "org.apache.kafka.connect.transforms.InsertField$Value",
+    "transforms.InsertField.static.field" : "type",
+    "transforms.InsertField.static.value" : "eventsource"
+  }
+}

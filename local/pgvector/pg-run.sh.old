@@ -1,0 +1,12 @@
+#!/bin/bash
+
+NETWORK_NAME="kafka-net"  # ← Kafka와 동일한 네트워크
+
+docker run --name pgvector \
+    -d \
+    --network ${NETWORK_NAME} \
+    -p 5432:5432 \
+    -e POSTGRES_USER=postgres \
+    -e POSTGRES_PASSWORD=postgres \
+    -v pgdata:/var/lib/postgresql/data \
+    pgvector/pgvector:pg17

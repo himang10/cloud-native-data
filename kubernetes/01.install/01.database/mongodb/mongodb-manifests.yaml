@@ -1,0 +1,154 @@
+---
+# MongoDB 인증 정보 (official mongo:8.0 이미지 사용)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mongodb-1-auth
+  namespace: kafka
+  labels:
+    app: mongodb-1
+type: Opaque
+stringData:
+  MONGO_INITDB_ROOT_USERNAME: root
+  MONGO_INITDB_ROOT_PASSWORD: "Skala25a!23$"
+---
+# MongoDB 초기화 스크립트 (cloud DB + skala 사용자 생성)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mongodb-1-init
+  namespace: kafka
+  labels:
+    app: mongodb-1
+data:
+  01-create-user.js: |
+    db = db.getSiblingDB("cloud");
+    db.createUser({
+      user: "skala",
+      pwd: "Skala25a!23$",
+      roles: [
+        { role: "readWrite", db: "cloud" }
+      ]
+    });
+---
+# MongoDB StatefulSet - official docker.io/mongo:8.0 이미지 사용
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mongodb-1
+  namespace: kafka
+  labels:
+    app: mongodb-1
+spec:
+  serviceName: mongodb-1-headless
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mongodb-1
+  template:
+    metadata:
+      labels:
+        app: mongodb-1
+    spec:
+      securityContext:
+        fsGroup: 999
+      containers:
+      - name: mongodb
+        image: docker.io/mongo:8.0
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 27017
+          name: mongodb
+        env:
+        - name: MONGO_INITDB_ROOT_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: mongodb-1-auth
+              key: MONGO_INITDB_ROOT_USERNAME
+        - name: MONGO_INITDB_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mongodb-1-auth
+              key: MONGO_INITDB_ROOT_PASSWORD
+        volumeMounts:
+        - name: data
+          mountPath: /data/db
+        - name: init-scripts
+          mountPath: /docker-entrypoint-initdb.d
+          readOnly: true
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "750m"
+        livenessProbe:
+          exec:
+            command:
+            - mongosh
+            - --eval
+            - "db.adminCommand('ping')"
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 6
+        readinessProbe:
+          exec:
+            command:
+            - mongosh
+            - --eval
+            - "db.adminCommand('ping')"
+          initialDelaySeconds: 15
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 6
+      volumes:
+      - name: init-scripts
+        configMap:
+          name: mongodb-1-init
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+      labels:
+        app: mongodb-1
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: gp2
+      resources:
+        requests:
+          storage: 20Gi
+---
+# MongoDB 헤드리스 서비스 (StatefulSet DNS 해소용)
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongodb-1-headless
+  namespace: kafka
+  labels:
+    app: mongodb-1
+spec:
+  clusterIP: None
+  selector:
+    app: mongodb-1
+  ports:
+  - port: 27017
+    targetPort: 27017
+    name: mongodb
+---
+# MongoDB ClusterIP 서비스
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongodb-1
+  namespace: kafka
+  labels:
+    app: mongodb-1
+spec:
+  type: ClusterIP
+  selector:
+    app: mongodb-1
+  ports:
+  - port: 27017
+    targetPort: 27017
+    name: mongodb

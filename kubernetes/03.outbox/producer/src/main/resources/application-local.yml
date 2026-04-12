@@ -1,0 +1,38 @@
+# 로컬 개발 환경 설정
+
+spring:
+  config:
+    activate:
+      on-profile: local
+
+  # 데이터베이스 설정 (MariaDB)
+  datasource:
+    url: jdbc:mariadb://localhost:3306/cloud
+    username: skala
+    password: Skala25a!23$
+    driver-class-name: org.mariadb.jdbc.Driver
+    
+    # HikariCP 커넥션 풀 설정
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      connection-test-query: SELECT 1
+
+# 로컬에서는 상세한 로그 표시
+logging:
+  level:
+    root: INFO
+    '[com.example.producer]': INFO
+    '[org.hibernate.SQL]': INFO
+    '[org.hibernate.type.descriptor.sql.BasicBinder]': INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+
+# 로컬에서는 모든 헬스체크 정보 표시
+management:
+  endpoint:
+    health:
+      show-details: always

@@ -1,0 +1,41 @@
+# 공통 설정
+spring:
+  application:
+    name: outbox-producer
+  profiles:
+    active: local
+  
+  # JPA 설정
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        '[format_sql]': true
+        dialect: org.hibernate.dialect.MariaDBDialect
+        '[jdbc.time_zone]': Asia/Seoul
+
+# 서버 설정
+server:
+  port: 8080
+  shutdown: graceful
+
+# 관리 엔드포인트 설정
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+  health:
+    db:
+      enabled: true
+
+# 로깅 설정
+logging:
+  level:
+    root: INFO
+    '[com.example.producer]': INFO

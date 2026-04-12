@@ -1,0 +1,63 @@
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaConnect
+metadata:
+  name: jdbc-sink-connect
+  namespace: kafka
+  annotations:
+    strimzi.io/use-connector-resources: "true"
+
+spec:
+  # 기본 설정
+  replicas: 1
+  bootstrapServers: my-kafka-cluster-kafka-bootstrap:9092
+  image: amdp-registry.skala-ai.com/library/skala-kafka-connect:debezium-3.2.3-kafka-4.0
+  version: 4.0.0
+
+  # Kafka Connect 설정
+  config:
+    # 클러스터 설정
+    group.id: sink-connect-cluster
+    
+    # 내부 토픽 복제 설정
+    config.storage.replication.factor: 1
+    config.storage.topic: sink-configs
+    offset.storage.replication.factor: 1
+    offset.storage.topic: sink-offsets
+    status.storage.replication.factor: 1
+    status.storage.topic: sink-status
+    
+    # Consumer 설정
+    consumer.fetch.max.wait.ms: 500
+    consumer.fetch.min.bytes: 1024
+    consumer.max.poll.interval.ms: 300000
+    consumer.max.poll.records: 500
+    
+    # 에러 처리 설정
+    errors.retry.delay.max.ms: 60000
+    errors.retry.timeout: 0
+    
+    # 내부 컨버터 설정 (스키마 비활성화)
+    internal.key.converter: org.apache.kafka.connect.json.JsonConverter
+    internal.key.converter.schemas.enable: false
+    internal.value.converter: org.apache.kafka.connect.json.JsonConverter
+    internal.value.converter.schemas.enable: false
+    
+    # 외부 컨버터 설정 (스키마 활성화)
+    key.converter: org.apache.kafka.connect.json.JsonConverter
+    key.converter.schemas.enable: true
+    value.converter: org.apache.kafka.connect.json.JsonConverter
+    value.converter.schemas.enable: true
+
+  # JVM 메모리 설정
+  jvmOptions:
+    -Xms: 1g
+    -Xmx: 1g
+
+  # 리소스 할당
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 2Gi
+    requests:
+      cpu: 500m
+      memory: 1Gi

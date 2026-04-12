@@ -1,0 +1,64 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: outbox-consumer
+  namespace: kafka
+  labels:
+    app: outbox-consumer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: outbox-consumer
+  template:
+    metadata:
+      labels:
+        app: outbox-consumer
+    spec:
+      containers:
+      - name: consumer
+        image: amdp-registry.skala-ai.com/library/outbox-consumer:1.0.0
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8081
+          name: http
+        env:
+        # Profile은 Dockerfile에서 prod로 설정됨
+        # 필요시 여기서 오버라이드 가능
+        - name: SPRING_PROFILES_ACTIVE
+          value: "prod"
+        - name: SPRING_DATASOURCE_URL
+          value: "jdbc:postgresql://postgres-1-postgresql.kafka.svc.cluster.local:5432/cloud?tcpKeepAlive=true&socketTimeout=30&connectTimeout=30"
+        - name: SPRING_DATASOURCE_USERNAME
+          value: "skala"
+        - name: SPRING_DATASOURCE_PASSWORD
+          value: "Skala25a!23$"
+        - name: SPRING_KAFKA_BOOTSTRAP_SERVERS
+          value: "my-kafka-cluster-kafka-bootstrap.kafka.svc.cluster.local:9092"
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: outbox-consumer
+  namespace: kafka
+  labels:
+    app: outbox-consumer
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 80
+    targetPort: 8081
+    protocol: TCP
+    name: http
+  selector:
+    app: outbox-consumer
+

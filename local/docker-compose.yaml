@@ -1,0 +1,172 @@
+# =====================================================================
+# CDC 로컬 개발 환경
+# 서비스: Kafka (KRaft), Kafka Connect (Debezium), MariaDB, pgvector
+#
+# 시작:  docker-compose up -d
+# 종료:  docker-compose down
+# 삭제:  docker-compose down -v   (볼륨까지 삭제)
+#
+# 외부 접속 포트:
+#   Kafka           : localhost:9094  (bootstrap-server)
+#   Kafka Connect   : http://localhost:8083
+#   MariaDB         : localhost:3306
+#   PostgreSQL      : localhost:5433  (내부 5432 → 호스트 5433 매핑)
+# =====================================================================
+
+networks:
+  kafka-net:
+    external: true
+
+volumes:
+  kafka_data:
+  mariadb_data:
+  pgvector_data:
+
+services:
+
+  # -------------------------------------------------------------------
+  # Kafka (KRaft 모드)
+  # - 내부 통신: kafka:9092  (kafka-connect 등 컨테이너간)
+  # - 외부 접속: localhost:9094  (호스트 머신에서 접속)
+  # -------------------------------------------------------------------
+  kafka:
+    image: bitnamilegacy/kafka:4.0.0-debian-12-r10
+    container_name: kafka
+    networks:
+      - kafka-net
+    environment:
+      # KRaft 기본 설정
+      - KAFKA_CFG_NODE_ID=0
+      - KAFKA_CFG_PROCESS_ROLES=controller,broker
+      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka:9093
+      # 리스너 설정:
+      #   PLAINTEXT  - 컨테이너 내부 통신 (kafka-connect → kafka)
+      #   CONTROLLER - KRaft 컨트롤러
+      #   EXTERNAL   - 호스트 머신 외부 접속
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092,EXTERNAL://localhost:9094
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT
+      - KAFKA_KRAFT_CLUSTER_ID=abcdefghijk1234567890
+    ports:
+      - '9094:9094'     # 외부 접속 (호스트 → Kafka)
+      - '9092:9092'     # 내부 접속 (호스트 → Kafka)
+    volumes:
+      - kafka_data:/bitnami/kafka
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics.sh --bootstrap-server localhost:9092 --list > /dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
+
+  # -------------------------------------------------------------------
+  # Kafka Connect (Debezium)
+  # - REST API: http://localhost:8083
+  # - Kafka 연결: kafka:9092 (내부)
+  # - 이미지: local/kafka-connect/Dockerfile 로 빌드 (apache/kafka 기반)
+  # -------------------------------------------------------------------
+  kafka-connect:
+    build:
+      context: ./kafka-connect
+      dockerfile: Dockerfile
+    image: kafka-connect-local:latest
+    container_name: kafka-connect-debezium
+    networks:
+      - kafka-net
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      - KAFKA_HEAP_OPTS=-Xms512m -Xmx1g
+    ports:
+      - '8083:8083'     # REST API 외부 접속
+    volumes:
+      - ./kafka-connect/connect-distributed.properties:/opt/kafka/config/connect-distributed.properties:ro
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+          cpus: '1.0'
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:8083/"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+
+  # -------------------------------------------------------------------
+  # MariaDB (CDC용 Binlog 활성화)
+  # - 외부 접속: localhost:3306
+  # - root password : Skala25a!23$
+  # - database      : cloud
+  # - user/password : skala / Skala25a!23$
+  # -------------------------------------------------------------------
+  mariadb:
+    image: bitnamilegacy/mariadb:11.4.6-debian-12-r0
+    container_name: mariadb-cdc
+    networks:
+      - kafka-net
+    environment:
+      - MARIADB_ROOT_PASSWORD=Skala25a!23$$
+      - MARIADB_DATABASE=cloud
+      - MARIADB_USER=skala
+      - MARIADB_PASSWORD=Skala25a!23$$
+    ports:
+      - '3306:3306'     # 외부 접속
+    volumes:
+      - mariadb_data:/bitnami/mariadb
+      - ./mariadb/init/mariadb-custom.cnf:/opt/bitnami/mariadb/conf/my_custom.cnf:ro
+      - ./mariadb/init/setup_debezium_user.sql:/docker-entrypoint-initdb.d/01_setup_debezium_user.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-pSkala25a!23$$"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # -------------------------------------------------------------------
+  # Debezium UI
+  # - Web UI: http://localhost:8088
+  # - Kafka Connect REST API 를 시각적으로 관리
+  # -------------------------------------------------------------------
+  debezium-ui:
+    image: quay.io/debezium/debezium-ui:2.5
+    platform: linux/amd64   # ARM64(Apple Silicon) 맥에서 Rosetta 에뮬레이션으로 실행
+    container_name: debezium-ui
+    networks:
+      - kafka-net
+    depends_on:
+      kafka-connect:
+        condition: service_healthy
+    environment:
+      - KAFKA_CONNECT_URIS=http://kafka-connect:8083
+    ports:
+      - '8088:8080'     # Web UI 외부 접속
+
+  # -------------------------------------------------------------------
+  # PostgreSQL + pgvector (CDC Sink 대상)
+  # - 외부 접속: localhost:5432
+  # - user/password : postgres / postgres
+  # - database      : cloud
+  # -------------------------------------------------------------------
+  pgvector:
+    image: pgvector/pgvector:pg17
+    container_name: pgvector
+    networks:
+      - kafka-net
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=cloud
+    ports:
+      - '5433:5432'     # 외부 접속 (conduktor postgres가 5432 점유 시 5433 사용)
+    volumes:
+      - pgvector_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d cloud"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s

@@ -1,0 +1,21 @@
+---
+# Consumer Service
+# - Kafka 리스너이므로 외부 노출은 불필요하지만
+#   Actuator(/actuator/health) 헬스체크 및 내부 모니터링용으로 노출
+apiVersion: v1
+kind: Service
+metadata:
+  name: outbox-consumer
+  namespace: kafka
+  labels:
+    app: outbox-consumer
+    component: consumer
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+      protocol: TCP
+  selector:
+    app: outbox-consumer

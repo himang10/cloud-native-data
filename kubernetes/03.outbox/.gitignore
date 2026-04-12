@@ -1,0 +1,21 @@
+# Build artifacts
+target/
+build/
+*.class
+
+# IDE
+.idea/
+.vscode/
+*.iml
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Don't ignore backup directory (we want to track it)
+# backup/ 디렉토리는 의도적으로 Git에 포함시킵니다

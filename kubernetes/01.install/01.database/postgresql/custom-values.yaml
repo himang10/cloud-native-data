@@ -1,0 +1,207 @@
+# 완전한 PostgreSQL Helm Chart Values
+global:
+  postgresql:
+    auth:
+      postgresPassword: "Skala25a!23$"
+      username: "skala"
+      password: "Skala25a!23$"
+      database: "cloud"
+  defaultStorageClass: "gp3"
+  security:
+    allowInsecureImages: true
+
+# 아키텍처 설정 (standalone 또는 replication)
+architecture: standalone
+
+auth:
+  postgresPassword: "Skala25a!23$"
+  username: "skala"
+  password: "Skala25a!23$"
+  database: "cloud"
+  existingSecret: ""
+  secretKeys:
+    adminPasswordKey: postgres-password
+    userPasswordKey: password
+
+# Primary 노드 설정
+primary:
+  name: primary
+  
+  # 리소스 설정 (pgvector 사용을 위해 증가)
+#  resources:
+#    limits:
+#      memory: "1Gi"
+#      cpu: "1000m"
+#    requests:
+#      memory: "500Mi"
+#      cpu: "500m"
+  
+  # 영구 스토리지 설정
+  persistence:
+    enabled: true
+    storageClass: "gp3"
+    accessModes:
+      - ReadWriteOnce
+    size: "20Gi"
+    annotations: {}
+    selector: {}
+    dataSource: {}
+    existingClaim: ""
+
+  # PostgreSQL 설정
+  configuration: |
+    # 네트워크 설정 - 모든 인터페이스에서 리스닝
+    listen_addresses = '*'
+    port = 5432
+
+    # pgvector 확장 로드
+    shared_preload_libraries = 'vector'
+
+    max_connections = 200
+    shared_buffers = 256MB
+    effective_cache_size = 1GB
+    maintenance_work_mem = 128MB
+    checkpoint_completion_target = 0.9
+    wal_buffers = 16MB
+    default_statistics_target = 100
+    random_page_cost = 1.1
+    effective_io_concurrency = 200
+    work_mem = 8MB
+    min_wal_size = 1GB
+    max_wal_size = 4GB
+
+    # pgvector 최적화 설정
+    max_parallel_workers_per_gather = 2
+    max_parallel_workers = 8
+
+  # pg_hba.conf 설정 - 외부 접속 허용
+  pgHbaConfiguration: |
+    # TYPE  DATABASE        USER            ADDRESS                 METHOD
+    local   all             all                                     trust
+    host    all             all             127.0.0.1/32            trust
+    host    all             all             ::1/128                 trust
+    
+    # 외부 접속 허용 설정
+    host    all             all             0.0.0.0/0               md5
+    host    all             all             ::/0                    md5
+    
+    # 복제 설정 (필요한 경우)
+    host    replication     all             0.0.0.0/0               md5
+  extendedConfiguration: ""
+  initdb:
+    args: ""
+    postgresqlWalDir: ""
+    scripts: 
+      01-init-pgvector.sql: |
+        -- pgvector 확장을 모든 데이터베이스에 생성
+        \c postgres;
+        CREATE EXTENSION IF NOT EXISTS vector;
+        
+        \c cloud;
+        CREATE EXTENSION IF NOT EXISTS vector;
+        
+        -- 확장 설치 확인
+        SELECT 'pgvector extension installed successfully' as status;
+
+  # 서비스 설정
+  service:
+    type: ClusterIP
+    ports:
+      postgresql: 5432
+    nodePorts:
+      postgresql: ""
+    clusterIP: ""
+    loadBalancerIP: ""
+    loadBalancerSourceRanges: []
+    annotations: {}
+    sessionAffinity: None
+    sessionAffinityConfig: {}
+
+# 읽기 전용 복제본 설정 (replication 아키텍처용)
+readReplicas:
+  name: read
+  replicaCount: 0
+  
+  resources:
+    limits:
+      memory: "1Gi"
+      cpu: "500m"
+    requests:
+      memory: "512Mi"
+      cpu: "250m"
+  
+  persistence:
+    enabled: true
+    storageClass: "gp3"
+    accessModes:
+      - ReadWriteOnce
+    size: 20Gi
+
+# 백업 설정
+backup:
+  enabled: false
+  cronjob:
+    schedule: "0 2 * * *"
+    storage:
+      storageClass: "gp2"
+      size: 10Gi
+
+# 메트릭 수집 설정
+metrics:
+  enabled: false
+  image:
+    registry: docker.io
+    repository: bitnamilegacy/postgres-exporter
+    tag: 0.11.1-debian-11-r28
+  service:
+    type: ClusterIP
+    port: 9187
+  serviceMonitor:
+    enabled: false
+
+# 네트워크 정책
+networkPolicy:
+  enabled: false
+  allowExternal: true
+  ingress:
+    - from: []  # 모든 소스 허용
+      ports:
+      - protocol: TCP
+        port: 5432
+
+# 볼륨 권한
+#volumePermissions:
+  #enabled: false
+  #image:
+    #registry: docker.io
+    #repository: bitnamilegacy/bitnami-shell
+    #tag: 11-debian-11-r27
+  
+# 보안 컨텍스트
+securityContext:
+  enabled: true
+  fsGroup: 1001
+
+containerSecurityContext:
+  enabled: true
+  runAsUser: 1001
+  runAsNonRoot: true
+
+# 추가 환경 변수 (pgvector 관련)
+extraEnvVars:
+  - name: POSTGRES_INITDB_ARGS
+    value: "--auth-host=md5 --auth-local=trust"
+  - name: PGVECTOR_ENABLED
+    value: "true"
+
+# PostgreSQL 이미지 설정
+image:
+  registry: amdp-registry.skala-ai.com
+  repository: library/postgres-pgvector
+  tag: 15.2.0-debian-11-r31
+  pullPolicy: IfNotPresent
+  pullSecrets: []
+
+# 디버그 모드
+diagnosticMode:
+  enabled: false

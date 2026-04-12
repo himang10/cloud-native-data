@@ -1,0 +1,62 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: outbox-producer
+  namespace: kafka
+  labels:
+    app: outbox-producer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: outbox-producer
+  template:
+    metadata:
+      labels:
+        app: outbox-producer
+    spec:
+      containers:
+      - name: producer
+        image: amdp-registry.skala-ai.com/library/outbox-producer:1.0.0
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8080
+          name: http
+        env:
+        # Profile은 Dockerfile에서 prod로 설정됨
+        # 필요시 여기서 오버라이드 가능
+        - name: SPRING_PROFILES_ACTIVE
+          value: "prod"
+        - name: SPRING_DATASOURCE_URL
+          value: "jdbc:mariadb://mariadb-1.kafka.svc.cluster.local:3306/cloud?useUnicode=true&characterEncoding=utf8mb4&serverTimezone=Asia/Seoul"
+        - name: SPRING_DATASOURCE_USERNAME
+          value: "skala"
+        - name: SPRING_DATASOURCE_PASSWORD
+          value: "Skala25a!23$"
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: outbox-producer
+  namespace: kafka
+  labels:
+    app: outbox-producer
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 80
+    targetPort: 8080
+    protocol: TCP
+    name: http
+  selector:
+    app: outbox-producer
+

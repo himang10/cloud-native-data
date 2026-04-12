@@ -1,0 +1,123 @@
+# Valkey values.yaml (bitnami/valkey 차트용)
+# Valkey = Redis 완전 호환 오픈소스 BSD 포크 (Linux Foundation)
+# bitnami/valkey 공식 이미지 사용 (무료)
+
+## Global 설정
+global:
+  defaultStorageClass: "gp3"
+  valkey:
+    password: "Skala25a!23$"
+
+## 이름 오버라이드 (redis-1-valkey-primary → redis-1-primary)
+fullnameOverride: "redis-1"
+
+## Valkey 아키텍처 및 인증
+architecture: standalone
+auth:
+  enabled: true
+  password: "Skala25a!23$"
+  usePasswordFiles: true
+
+## Valkey 설정
+commonConfiguration: |-
+  # RDB 지속성 설정
+  save 900 1
+  save 300 10
+  save 60 10000
+  appendonly no
+  rdbcompression yes
+  rdbchecksum yes
+  
+  # 네트워크 설정
+  bind 0.0.0.0
+  protected-mode yes
+  
+  # 메모리 설정
+  maxmemory-policy allkeys-lru
+  
+  # ACL 사용자 설정
+  user admin on >Skala25a!23$ ~* &* +@all
+  user skala on >Skala25a!23$ ~* &* +@read +@write +@stream +@connection +@list +@set +@sortedset +@hash +@bitmap +@hyperloglog +@geo +@pubsub -@dangerous -flushdb -flushall -shutdown -debug -eval -script
+
+## Primary 설정 (Valkey: master → primary)
+primary:
+  # 리소스
+  resourcesPreset: "medium"
+  
+  # 보안 명령어 비활성화
+  disableCommands:
+    - FLUSHDB
+    - FLUSHALL
+    - DEBUG
+    - SHUTDOWN
+  
+  # Health Check
+  livenessProbe:
+    enabled: true
+    initialDelaySeconds: 20
+    periodSeconds: 5
+    timeoutSeconds: 5
+    failureThreshold: 5
+  
+  readinessProbe:
+    enabled: true
+    initialDelaySeconds: 20
+    periodSeconds: 5
+    timeoutSeconds: 1
+    failureThreshold: 5
+  
+  # 스토리지 설정
+  persistence:
+    enabled: true
+    storageClass: "gp3"
+    size: 20Gi
+    accessModes:
+      - ReadWriteOnce
+  
+  # 서비스 설정 (ClusterIP)
+  service:
+    type: ClusterIP
+    ports:
+      valkey: 6379
+  
+  # Pod Disruption Budget
+  pdb:
+    create: true
+
+## Replica 설정 (standalone 모드에서는 비활성화)
+replica:
+  replicaCount: 0
+
+## Sentinel 비활성화
+sentinel:
+  enabled: false
+
+## 네트워크 정책
+networkPolicy:
+  enabled: true
+  allowExternal: true
+
+## 메트릭 (선택사항)
+metrics:
+  enabled: true
+  service:
+    type: ClusterIP
+    ports:
+      http: 9121
+
+## 보안 설정
+serviceAccount:
+  create: true
+  automountServiceAccountToken: false
+
+## 기타 비활성화
+rbac:
+  create: false
+podSecurityPolicy:
+  create: false
+tls:
+  enabled: false
+volumePermissions:
+  enabled: false
+sysctl:
+  enabled: false

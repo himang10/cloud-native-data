@@ -1,0 +1,22 @@
+[mysqld]
+# 기본 설정
+skip-name-resolve
+explicit_defaults_for_timestamp
+max_allowed_packet=16M
+bind-address=0.0.0.0
+character-set-server=UTF8
+collation-server=utf8_general_ci
+
+# Debezium CDC를 위한 Binlog 설정
+log-bin=mysql-bin
+binlog-format=ROW
+binlog-row-image=FULL
+server-id=1
+expire-logs-days=7
+max-binlog-size=100M
+binlog-cache-size=32K
+transaction-isolation=READ-COMMITTED
+sync-binlog=1
+
+[client]
+default-character-set=UTF8

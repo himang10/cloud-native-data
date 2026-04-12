@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sk199-outbox-frontend
+  namespace: kafka
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sk199-outbox-frontend
+  template:
+    metadata:
+      annotations:
+        prometheus.io/scrape: 'true'
+        prometheus.io/port: '8081'
+        prometheus.io/path: '/actuator/prometheus'
+        update: 3df3429d
+      labels:
+        app: sk199-outbox-frontend
+    spec:
+      containers:
+      - name: outbox-frontend
+        image: amdp-registry.skala-ai.com/skala25a/sk199-outbox-frontend:1.0
+        imagePullPolicy: Always
+        env:
+        - name: USER_NAME
+          value: sk199
+        - name: NAMESPACE
+          value: kafka

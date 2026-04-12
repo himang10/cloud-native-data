@@ -1,0 +1,67 @@
+---
+# StatefulSet용 Headless Service
+# StatefulSet의 serviceName으로 참조되며, 각 Pod에 고유 DNS 이름을 부여합니다.
+# Pod DNS: outbox-consumer-{ordinal}.outbox-consumer-headless.kafka.svc.cluster.local
+apiVersion: v1
+kind: Service
+metadata:
+  name: outbox-consumer-headless
+  namespace: kafka
+  labels:
+    app: outbox-consumer
+spec:
+  clusterIP: None
+  ports:
+  - port: 8080
+    targetPort: 8080
+    protocol: TCP
+    name: http
+  selector:
+    app: outbox-consumer
+
+---
+# StatefulSet: group.instance.id = ${HOSTNAME} (outbox-consumer-0, outbox-consumer-1, ...)
+# Static Membership + CooperativeStickyAssignor로 재밸런싱 최소화
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: outbox-consumer
+  namespace: kafka
+  labels:
+    app: outbox-consumer
+spec:
+  serviceName: outbox-consumer-headless
+  replicas: 1
+  selector:
+    matchLabels:
+      app: outbox-consumer
+  template:
+    metadata:
+      labels:
+        app: outbox-consumer
+    spec:
+      containers:
+      - name: consumer
+        image: amdp-registry.skala-ai.com/library/outbox-consumer:1.0.0
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8080
+          name: http
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: "prod"
+        - name: SPRING_DATASOURCE_URL
+          value: "jdbc:postgresql://postgres-1-postgresql.kafka.svc.cluster.local:5432/cloud?tcpKeepAlive=true&socketTimeout=30&connectTimeout=30"
+        - name: SPRING_DATASOURCE_USERNAME
+          value: "skala"
+        - name: SPRING_DATASOURCE_PASSWORD
+          value: "Skala25a!23$"
+        - name: SPRING_KAFKA_BOOTSTRAP_SERVERS
+          value: "my-kafka-cluster-kafka-bootstrap.kafka.svc.cluster.local:9092"
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"

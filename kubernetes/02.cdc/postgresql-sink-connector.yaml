@@ -1,0 +1,65 @@
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaConnector
+metadata:
+  name: postgres-sink-cdc-connector-v1.0.0
+  namespace: kafka
+  labels:
+    strimzi.io/cluster: jdbc-sink-connect
+
+spec:
+  class: io.debezium.connector.jdbc.JdbcSinkConnector
+  tasksMax: 1
+  
+  config:
+    # 토픽 설정
+    #topics: mariadb-cdc.cloud.users
+    topics.regex: mariadb-cdc\.cloud\.(users|orders|products)
+    
+    # 데이터베이스 연결 설정
+    connection.url: jdbc:postgresql://postgres-1-postgresql:5432/cloud?tcpKeepAlive=true&socketTimeout=30&connectTimeout=30
+    connection.username: skala
+    connection.password: Skala25a!23$
+    
+    # 테이블 및 스키마 설정
+    table.name.format: cdc_${source.table}
+    auto.create: true
+    auto.evolve: true
+    schema.evolution: basic
+    quote.identifiers: false
+    
+    # 삽입 모드 설정
+    #primary.key.fields: id
+    insert.mode: upsert
+    primary.key.mode: record_key
+    delete.enabled: true
+    
+    # 배치 처리 설정
+    batch.size: 100
+    
+    # Hibernate C3P0 커넥션 풀 설정
+    hibernate.connection.provider_class: org.hibernate.connection.C3P0ConnectionProvider
+    hibernate.c3p0.min_size: 1
+    hibernate.c3p0.max_size: 5
+    hibernate.c3p0.acquire_increment: 1
+    hibernate.c3p0.timeout: 1800
+    hibernate.c3p0.max_statements: 50
+    hibernate.c3p0.idle_test_period: 30
+    hibernate.c3p0.idleConnectionTestPeriod: 30
+    hibernate.c3p0.maxIdleTime: 300
+    hibernate.c3p0.maxIdleTimeExcessConnections: 120
+    hibernate.c3p0.testConnectionOnCheckout: true
+    hibernate.c3p0.testConnectionOnCheckin: false
+    hibernate.c3p0.preferredTestQuery: SELECT 1
+    hibernate.c3p0.validate: true
+    
+    # 에러 처리 설정
+    errors.tolerance: all
+    errors.log.enable: true
+    errors.log.include.messages: true
+    errors.retry.delay.max.ms: 60000
+    errors.retry.timeout: 300000
+    
+    # Dead Letter Queue 설정
+    errors.deadletterqueue.topic.name: dlq-postgresql-sink
+    errors.deadletterqueue.topic.replication.factor: 1
+    errors.deadletterqueue.context.headers.enable: true

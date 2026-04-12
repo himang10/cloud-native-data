@@ -1,0 +1,115 @@
+---
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaConnector
+metadata:
+  name: mariadb-outbox-connector-v1.1
+  namespace: kafka
+  labels:
+    strimzi.io/cluster: debezium-source-connect
+  annotations:
+    description: "Debezium Outbox Pattern Connector for MariaDB"
+
+spec:
+  class: io.debezium.connector.mysql.MySqlConnector
+  tasksMax: 1
+  
+  config:
+    # ==========================================
+    # 데이터베이스 연결 설정
+    # ==========================================
+    database.hostname: mariadb-1.kafka.svc.cluster.local
+    database.port: "3306"
+    database.user: skala
+    database.password: Skala25a!23$
+    database.connectionTimeZone: Asia/Seoul
+    connect.timeout.ms: "30000"
+    
+    # ==========================================
+    # 데이터베이스 서버 설정
+    # ==========================================
+    # database.server.name: outbox-source-server
+    database.server.id: "284059"  
+    topic.prefix: mariadb-outbox-source-server
+    
+    # ==========================================
+    # Outbox 테이블 캡처 설정
+    # ==========================================
+    # 기존 CDC와 같은 'cloud' 데이터베이스 사용 (권장)
+    database.include.list: cloud
+    table.include.list: cloud.outbox_events
+    include.schema.changes: "false"
+    
+    # ==========================================
+    # 스냅샷 설정
+    # ==========================================
+    snapshot.mode: initial
+    snapshot.locking.mode: minimal
+    
+    # ==========================================
+    # 스키마 히스토리 설정
+    # ==========================================
+    schema.history.internal.kafka.bootstrap.servers: my-kafka-cluster-kafka-bootstrap:9092
+    schema.history.internal.kafka.topic: mariadb.dbhistory.outbox-source-server
+    
+    # ==========================================
+    # Outbox Event Router SMT (Single Message Transform)
+    # ==========================================
+    # Outbox Pattern의 핵심: 이벤트를 aggregate_type별로 라우팅
+    transforms: outbox
+    transforms.outbox.type: io.debezium.transforms.outbox.EventRouter
+    
+    # Outbox 테이블 필드 매핑 (명시적 설정)
+    transforms.outbox.table.field.event.id: event_id
+    transforms.outbox.table.field.event.key: aggregate_id
+    transforms.outbox.table.field.event.type: event_type
+    transforms.outbox.table.field.event.payload: payload
+    transforms.outbox.table.expand.json.payload: true
+    
+    # 라우팅 설정: aggregate_type 필드 값으로 토픽 결정
+    # aggregate_type='user' → 토픽='outbox.user' (소문자 사용)
+    transforms.outbox.route.by.field: aggregate_type
+    transforms.outbox.route.topic.replacement: outbox.${routedByValue}
+    
+    # 추가 메타데이터를 Kafka 메시지 헤더로 전송
+    transforms.outbox.table.fields.additional.placement: event_id:header,event_type:header,aggregate_type:header,aggregate_id:header,occurred_at:header
+    
+    # ==========================================
+    # 컨버터 설정
+    # ==========================================
+    # Key: aggregate_id를 문자열로 사용
+    key.converter: org.apache.kafka.connect.storage.StringConverter
+    
+    # Value: JSON 형식 (스키마 없음)
+    value.converter: org.apache.kafka.connect.json.JsonConverter
+    value.converter.schemas.enable: false
+    
+    # ==========================================
+    # 토픽 자동 생성 설정
+    # ==========================================
+    # Kafka Connector용 토픽을 자동 생성시 설정해야 할 필드 정보
+    topic.creation.enable: "true"
+    topic.creation.default.partitions: "3"
+    topic.creation.default.replication.factor: "1"
+    
+    # ==========================================
+    # 성능 튜닝 설정
+    # ==========================================
+    max.batch.size: "2048"
+    max.queue.size: "8192"
+    poll.interval.ms: "1000"
+    
+    # ==========================================
+    # 에러 처리 설정
+    # ==========================================
+    # DDL 파싱 에러에 대해 관대하게 처리
+    errors.tolerance: all
+    errors.log.enable: "true"
+    errors.log.include.messages: "true"
+    errors.deadletterqueue.topic.name: "outbox-connector-errors"
+    errors.deadletterqueue.topic.replication.factor: "1"
+    
+    # ==========================================
+    # DDL 파싱 에러 해결 설정
+    # ==========================================
+    # DDL 파싱 에러 시 계속 진행
+    schema.history.internal.skip.unparseable.ddl: "true"

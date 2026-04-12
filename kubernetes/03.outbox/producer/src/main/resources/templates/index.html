@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Outbox Pattern 데모</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body { font-family: 'Segoe UI', sans-serif; margin: 0; background: #f4f5f7; color: #333; }
+
+    /* ── 헤더 ── */
+    header {
+      background: #1a1a2e;
+      color: #fff;
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    header h1 { margin: 0; font-size: 20px; font-weight: 700; }
+    header .badge {
+      background: #4f8ef7;
+      border-radius: 4px;
+      padding: 2px 8px;
+      font-size: 12px;
+    }
+
+    /* ── 탭 ── */
+    .tabs {
+      display: flex;
+      gap: 0;
+      background: #fff;
+      border-bottom: 2px solid #e0e0e0;
+      padding: 0 24px;
+    }
+    .tab {
+      padding: 14px 22px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+      color: #666;
+      border-bottom: 3px solid transparent;
+      margin-bottom: -2px;
+      transition: all .15s;
+    }
+    .tab:hover { color: #4f8ef7; }
+    .tab.active { color: #4f8ef7; border-bottom-color: #4f8ef7; }
+
+    /* ── 컨텐츠 ── */
+    .content { padding: 24px; max-width: 1000px; margin: 0 auto; }
+    .panel { display: none; }
+    .panel.active { display: block; }
+
+    /* ── 카드 ── */
+    .card {
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 1px 4px rgba(0,0,0,.08);
+      padding: 20px 24px;
+      margin-bottom: 20px;
+    }
+    .card-title {
+      font-size: 15px;
+      font-weight: 700;
+      margin: 0 0 16px;
+      color: #1a1a2e;
+      border-bottom: 2px solid #4f8ef7;
+      padding-bottom: 8px;
+    }
+
+    /* ── 폼 ── */
+    .form-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+    .form-group { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 140px; }
+    .form-group label { font-size: 12px; color: #666; font-weight: 600; }
+    input[type="text"],
+    input[type="email"],
+    input[type="number"],
+    input[type="tel"],
+    select,
+    textarea {
+      padding: 8px 10px;
+      font-size: 13px;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      outline: none;
+      width: 100%;
+      transition: border-color .15s;
+    }
+    input:focus, select:focus, textarea:focus { border-color: #4f8ef7; }
+    input:disabled, select:disabled { background: #f5f5f5; color: #999; cursor: not-allowed; }
+    textarea { resize: vertical; min-height: 60px; }
+
+    .btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+    button {
+      padding: 8px 16px;
+      font-size: 13px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: opacity .15s;
+      white-space: nowrap;
+    }
+    button:hover { opacity: .85; }
+    .btn-primary   { background: #4f8ef7; color: #fff; }
+    .btn-success   { background: #28a745; color: #fff; }
+    .btn-warning   { background: #fd7e14; color: #fff; }
+    .btn-danger    { background: #dc3545; color: #fff; }
+    .btn-secondary { background: #6c757d; color: #fff; }
+    .btn-info      { background: #17a2b8; color: #fff; }
+    .btn-sm { padding: 5px 10px; font-size: 12px; }
+
+    /* ── 메시지 ── */
+    .msg { margin-top: 8px; font-size: 13px; min-height: 18px; }
+    .msg.success { color: #28a745; }
+    .msg.error   { color: #dc3545; }
+
+    /* ── 테이블 ── */
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { border: 1px solid #e8e8e8; padding: 9px 12px; text-align: left; vertical-align: middle; }
+    th { background: #f8f9fc; font-weight: 700; color: #555; }
+    tr:hover td { background: #f0f5ff; }
+    tr.selected td { background: #e8f0fe; }
+
+    /* ── 뱃지 ── */
+    .status-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .status-PENDING   { background: #fff3cd; color: #856404; }
+    .status-CONFIRMED { background: #d1ecf1; color: #0c5460; }
+    .status-SHIPPED   { background: #cce5ff; color: #004085; }
+    .status-DELIVERED { background: #d4edda; color: #155724; }
+    .status-CANCELLED,.status-cancelled { background: #f8d7da; color: #721c24; }
+
+    /* ── 주문 아이템 ── */
+    .order-items-area { border: 1px dashed #ccc; border-radius: 6px; padding: 12px; margin-top: 8px; }
+    .order-item-row { display: flex; gap: 8px; align-items: flex-end; margin-bottom: 8px; }
+    .order-item-row .form-group { margin-bottom: 0; }
+    .total-amount-display {
+      text-align: right;
+      font-size: 15px;
+      font-weight: 700;
+      color: #1a1a2e;
+      padding: 8px 0 0;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ━━━ 헤더 ━━━ -->
+<header>
+  <h1>Outbox Pattern 데모</h1>
+  <span class="badge">Spring Boot + Debezium</span>
+</header>
+
+<!-- ━━━ 탭 ━━━ -->
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('user',this)">👤 사용자 관리</div>
+  <div class="tab" onclick="switchTab('product',this)">📦 제품 관리</div>
+  <div class="tab" onclick="switchTab('order',this)">🛒 주문 관리</div>
+</div>
+
+<!-- ━━━ 컨텐츠 ━━━ -->
+<div class="content">
+
+  <!-- ============================================================ -->
+  <!-- 사용자 관리 패널 -->
+  <!-- ============================================================ -->
+  <div id="panel-user" class="panel active">
+
+    <!-- 등록/수정 폼 -->
+    <div class="card">
+      <div class="card-title" id="user-form-title">사용자 등록</div>
+      <div class="form-row">
+        <div class="form-group" style="max-width:80px">
+          <label>ID</label>
+          <input id="u-id" type="number" placeholder="자동" disabled/>
+        </div>
+        <div class="form-group">
+          <label>이름 *</label>
+          <input id="u-name" type="text" placeholder="홍길동"/>
+        </div>
+        <div class="form-group">
+          <label>이메일 *</label>
+          <input id="u-email" type="email" placeholder="hong@example.com"/>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn-success" id="u-btn-create" onclick="userSave()">등록</button>
+        <button class="btn-warning" id="u-btn-update" style="display:none" onclick="userSave()">수정</button>
+        <button class="btn-secondary" onclick="userReset()">초기화</button>
+      </div>
+      <div class="msg" id="u-msg"></div>
+    </div>
+
+    <!-- 목록 -->
+    <div class="card">
+      <div class="card-title">사용자 목록</div>
+      <div class="form-row" style="margin-bottom:12px">
+        <div class="form-group" style="max-width:140px">
+          <label>ID 검색</label>
+          <input id="u-search-id" type="number" placeholder="전체 조회 시 빈칸"/>
+        </div>
+        <div class="form-group" style="justify-content:flex-end; max-width:180px">
+          <label>&nbsp;</label>
+          <div class="btn-row">
+            <button class="btn-primary btn-sm" onclick="userSearch()">검색</button>
+            <button class="btn-primary btn-sm" onclick="userLoadAll()">전체 조회</button>
+          </div>
+        </div>
+      </div>
+      <div class="msg error" id="u-search-msg"></div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>ID</th><th>이름</th><th>이메일</th><th>생성일</th><th>수정</th><th>삭제</th></tr>
+          </thead>
+          <tbody id="u-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- 제품 관리 패널 -->
+  <!-- ============================================================ -->
+  <div id="panel-product" class="panel">
+
+    <!-- 등록/수정 폼 -->
+    <div class="card">
+      <div class="card-title" id="p-form-title">제품 등록</div>
+      <div class="form-row">
+        <div class="form-group" style="max-width:80px">
+          <label>ID</label>
+          <input id="p-id" type="number" placeholder="자동" disabled/>
+        </div>
+        <div class="form-group" style="flex:3">
+          <label>제품명 *</label>
+          <input id="p-name" type="text" placeholder="스마트폰"/>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group" style="flex:3">
+          <label>설명</label>
+          <textarea id="p-desc" placeholder="제품 설명 (선택)"></textarea>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group" style="max-width:160px">
+          <label>가격 (원) *</label>
+          <input id="p-price" type="number" min="0" step="100" placeholder="99000"/>
+        </div>
+        <div class="form-group" style="max-width:120px">
+          <label>재고 *</label>
+          <input id="p-stock" type="number" min="0" placeholder="100"/>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn-success" id="p-btn-create" onclick="productSave()">등록</button>
+        <button class="btn-warning" id="p-btn-update" style="display:none" onclick="productSave()">수정</button>
+        <button class="btn-secondary" onclick="productReset()">초기화</button>
+      </div>
+      <div class="msg" id="p-msg"></div>
+    </div>
+
+    <!-- 목록 -->
+    <div class="card">
+      <div class="card-title">제품 목록</div>
+      <div class="form-row" style="margin-bottom:12px">
+        <div class="form-group" style="max-width:140px">
+          <label>ID 검색</label>
+          <input id="p-search-id" type="number" placeholder="전체 조회 시 빈칸"/>
+        </div>
+        <div class="form-group" style="justify-content:flex-end; max-width:180px">
+          <label>&nbsp;</label>
+          <div class="btn-row">
+            <button class="btn-primary btn-sm" onclick="productSearch()">검색</button>
+            <button class="btn-primary btn-sm" onclick="productLoadAll()">전체 조회</button>
+          </div>
+        </div>
+      </div>
+      <div class="msg error" id="p-search-msg"></div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>ID</th><th>제품명</th><th>설명</th><th>가격</th><th>재고</th><th>생성일</th><th>수정</th><th>삭제</th></tr>
+          </thead>
+          <tbody id="p-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- 주문 관리 패널 -->
+  <!-- ============================================================ -->
+  <div id="panel-order" class="panel">
+
+    <!-- 주문 생성 폼 -->
+    <div class="card">
+      <div class="card-title">주문 생성</div>
+      <div class="form-row">
+        <div class="form-group" style="flex:2">
+          <label>사용자 *</label>
+          <select id="o-user-id">
+            <option value="">-- 사용자 선택 --</option>
+          </select>
+        </div>
+        <div class="form-group" style="flex:2">
+          <label>주문 번호</label>
+          <input id="o-order-number" type="text" placeholder="자동 생성" readonly style="background:#f5f5f5;color:#555"/>
+        </div>
+      </div>
+
+      <!-- 주문 아이템 -->
+      <label style="font-size:12px;color:#666;font-weight:600">주문 상품</label>
+      <div class="order-items-area">
+        <div id="o-items-container">
+          <!-- 동적으로 추가됨 -->
+        </div>
+        <button class="btn-info btn-sm" onclick="addOrderItem()" style="margin-top:4px">+ 상품 추가</button>
+        <div class="total-amount-display">합계: <span id="o-total-display">0</span> 원</div>
+      </div>
+
+      <input type="hidden" id="o-total-amount" value="0"/>
+      <div class="btn-row" style="margin-top:12px">
+        <button class="btn-success" onclick="orderCreate()">주문 생성</button>
+        <button class="btn-secondary" onclick="orderFormReset()">초기화</button>
+      </div>
+      <div class="msg" id="o-msg"></div>
+    </div>
+
+    <!-- 주문 목록 -->
+    <div class="card">
+      <div class="card-title">주문 목록</div>
+      <div class="form-row" style="margin-bottom:12px">
+        <div class="form-group" style="max-width:140px">
+          <label>주문 ID</label>
+          <input id="o-search-id" type="number" placeholder="전체: 빈칸"/>
+        </div>
+        <div class="form-group" style="max-width:140px">
+          <label>사용자 ID</label>
+          <input id="o-search-user-id" type="number" placeholder="사용자별 조회"/>
+        </div>
+        <div class="form-group" style="justify-content:flex-end; max-width:200px">
+          <label>&nbsp;</label>
+          <div class="btn-row">
+            <button class="btn-primary btn-sm" onclick="orderSearch()">검색</button>
+            <button class="btn-primary btn-sm" onclick="orderLoadAll()">전체 조회</button>
+          </div>
+        </div>
+      </div>
+      <div class="msg error" id="o-search-msg"></div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>ID</th><th>주문번호</th><th>사용자 ID</th><th>상태</th><th>총금액</th><th>생성일</th><th>상태변경</th><th>취소</th></tr>
+          </thead>
+          <tbody id="o-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /content -->
+
+<script th:inline="javascript">
+/*<![CDATA[*/
+
+// ─────────────────────────────────────────
+// 공통 유틸
+// ─────────────────────────────────────────
+const BASE = '/api';
+
+async function apiFetch(path, options = {}) {
+  const res = await fetch(BASE + path, options);
+  if (res.status === 204) return null;
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message ?? data.detail ?? `HTTP ${res.status}`);
+  return data;
+}
+
+function setMsg(id, text, type) {
+  const el = document.getElementById(id);
+  el.textContent = text;
+  el.className = 'msg ' + (type ?? '');
+}
+
+function fmt(dt) {
+  if (!dt) return '-';
+  return dt.replace('T', ' ').substring(0, 16);
+}
+
+function fmtPrice(n) {
+  if (n == null) return '-';
+  return Number(n).toLocaleString() + ' 원';
+}
+
+// ─────────────────────────────────────────
+// 탭 전환
+// ─────────────────────────────────────────
+function switchTab(name, el) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('panel-' + name).classList.add('active');
+  el.classList.add('active');
+
+  // 탭 전환 시 목록 자동 갱신
+  if (name === 'user')    userLoadAll();
+  if (name === 'product') productLoadAll();
+  if (name === 'order')   { orderLoadAll(); loadUsersForSelect(); loadProductsForSelect(); }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// 사용자 관리
+// ═══════════════════════════════════════════════════════════════════
+let selectedUserId = null;
+
+function userReset() {
+  selectedUserId = null;
+  ['u-id','u-name','u-email'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('u-btn-create').style.display = '';
+  document.getElementById('u-btn-update').style.display = 'none';
+  document.getElementById('u-form-title').textContent = '사용자 등록';
+  setMsg('u-msg', '');
+  document.querySelectorAll('#u-tbody tr.selected').forEach(r => r.classList.remove('selected'));
+}
+
+function userSelectRow(id, name, email) {
+  selectedUserId = id;
+  document.getElementById('u-id').value    = id;
+  document.getElementById('u-name').value  = name;
+  document.getElementById('u-email').value = email;
+  document.getElementById('u-btn-create').style.display = 'none';
+  document.getElementById('u-btn-update').style.display = '';
+  document.getElementById('u-form-title').textContent = '사용자 수정';
+  document.querySelectorAll('#u-tbody tr').forEach(r => r.classList.remove('selected'));
+  document.getElementById('u-row-' + id)?.classList.add('selected');
+}
+
+function renderUsers(list) {
+  const arr = Array.isArray(list) ? list : [list];
+  document.getElementById('u-tbody').innerHTML = arr.map(u => `
+    <tr id="u-row-${u.id}" style="cursor:pointer" onclick="userSelectRow(${u.id},'${(u.name||'').replace(/'/g,"\\'")}','${(u.email||'').replace(/'/g,"\\'")}')">
+      <td>${u.id}</td>
+      <td>${u.name}</td>
+      <td>${u.email}</td>
+      <td>${fmt(u.createdAt ?? u.created_at)}</td>
+      <td><button class="btn-warning btn-sm" onclick="event.stopPropagation();userSelectRow(${u.id},'${(u.name||'').replace(/'/g,"\\'")}','${(u.email||'').replace(/'/g,"\\'")}')">수정</button></td>
+      <td><button class="btn-danger btn-sm" onclick="event.stopPropagation();userDelete(${u.id})">삭제</button></td>
+    </tr>`).join('');
+  setMsg('u-search-msg', '');
+}
+
+async function userLoadAll() {
+  try { renderUsers(await apiFetch('/users')); }
+  catch(e) { setMsg('u-search-msg', '오류: ' + e.message, 'error'); }
+}
+
+async function userSearch() {
+  const id = document.getElementById('u-search-id').value.trim();
+  try {
+    renderUsers(id ? await apiFetch('/users/' + id) : await apiFetch('/users'));
+  } catch(e) { setMsg('u-search-msg', '오류: ' + e.message, 'error'); }
+}
+
+async function userSave() {
+  const id    = document.getElementById('u-id').value.trim();
+  const name  = document.getElementById('u-name').value.trim();
+  const email = document.getElementById('u-email').value.trim();
+  if (!name || !email) { setMsg('u-msg', '이름과 이메일을 입력하세요.', 'error'); return; }
+  try {
+    let user;
+    if (id) {
+      user = await apiFetch('/users/' + id, {
+        method: 'PUT',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({name, email})
+      });
+      setMsg('u-msg', `수정 완료 — ${user.name} (${user.email})`, 'success');
+    } else {
+      user = await apiFetch('/users', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({name, email})
+      });
+      setMsg('u-msg', `등록 완료 — ID: ${user.id}, ${user.name}`, 'success');
+    }
+    userReset();
+    await userLoadAll();
+  } catch(e) { setMsg('u-msg', (id ? '수정' : '등록') + ' 실패: ' + e.message, 'error'); }
+}
+
+async function userDelete(id) {
+  if (!confirm(`ID ${id} 사용자를 삭제하시겠습니까?`)) return;
+  try {
+    await apiFetch('/users/' + id, {method: 'DELETE'});
+    if (selectedUserId === id) userReset();
+    await userLoadAll();
+  } catch(e) { setMsg('u-search-msg', '삭제 실패: ' + e.message, 'error'); }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// 제품 관리
+// ═══════════════════════════════════════════════════════════════════
+let selectedProductId = null;
+
+function productReset() {
+  selectedProductId = null;
+  ['p-id','p-name','p-desc','p-price','p-stock'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('p-btn-create').style.display = '';
+  document.getElementById('p-btn-update').style.display = 'none';
+  document.getElementById('p-form-title').textContent = '제품 등록';
+  setMsg('p-msg', '');
+  document.querySelectorAll('#p-tbody tr.selected').forEach(r => r.classList.remove('selected'));
+}
+
+function productSelectRow(id, name, desc, price, stock) {
+  selectedProductId = id;
+  document.getElementById('p-id').value    = id;
+  document.getElementById('p-name').value  = name;
+  document.getElementById('p-desc').value  = desc;
+  document.getElementById('p-price').value = price;
+  document.getElementById('p-stock').value = stock;
+  document.getElementById('p-btn-create').style.display = 'none';
+  document.getElementById('p-btn-update').style.display = '';
+  document.getElementById('p-form-title').textContent = '제품 수정';
+  document.querySelectorAll('#p-tbody tr').forEach(r => r.classList.remove('selected'));
+  document.getElementById('p-row-' + id)?.classList.add('selected');
+}
+
+function renderProducts(list) {
+  const arr = Array.isArray(list) ? list : [list];
+  document.getElementById('p-tbody').innerHTML = arr.map(p => {
+    const esc = s => (s||'').replace(/'/g,"\\'").replace(/"/g,'&quot;');
+    return `
+    <tr id="p-row-${p.id}" style="cursor:pointer"
+        onclick="productSelectRow(${p.id},'${esc(p.name)}','${esc(p.description??'')}',${p.price},${p.stock})">
+      <td>${p.id}</td>
+      <td>${p.name}</td>
+      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.description ?? '-'}</td>
+      <td>${fmtPrice(p.price)}</td>
+      <td>${p.stock}</td>
+      <td>${fmt(p.createdAt ?? p.created_at)}</td>
+      <td><button class="btn-warning btn-sm" onclick="event.stopPropagation();productSelectRow(${p.id},'${esc(p.name)}','${esc(p.description??'')}',${p.price},${p.stock})">수정</button></td>
+      <td><button class="btn-danger btn-sm" onclick="event.stopPropagation();productDelete(${p.id})">삭제</button></td>
+    </tr>`;
+  }).join('');
+  setMsg('p-search-msg', '');
+}
+
+async function productLoadAll() {
+  try { renderProducts(await apiFetch('/products')); }
+  catch(e) { setMsg('p-search-msg', '오류: ' + e.message, 'error'); }
+}
+
+async function productSearch() {
+  const id = document.getElementById('p-search-id').value.trim();
+  try {
+    renderProducts(id ? await apiFetch('/products/' + id) : await apiFetch('/products'));
+  } catch(e) { setMsg('p-search-msg', '오류: ' + e.message, 'error'); }
+}
+
+async function productSave() {
+  const id    = document.getElementById('p-id').value.trim();
+  const name  = document.getElementById('p-name').value.trim();
+  const desc  = document.getElementById('p-desc').value.trim();
+  const price = document.getElementById('p-price').value.trim();
+  const stock = document.getElementById('p-stock').value.trim();
+  if (!name || !price || stock === '') { setMsg('p-msg', '제품명, 가격, 재고를 입력하세요.', 'error'); return; }
+  const body = {name, description: desc, price: parseFloat(price), stock: parseInt(stock)};
+  try {
+    let prod;
+    if (id) {
+      prod = await apiFetch('/products/' + id, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+      setMsg('p-msg', `수정 완료 — ${prod.name}`, 'success');
+    } else {
+      prod = await apiFetch('/products', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+      setMsg('p-msg', `등록 완료 — ID: ${prod.id}, ${prod.name}`, 'success');
+    }
+    productReset();
+    await productLoadAll();
+  } catch(e) { setMsg('p-msg', (id ? '수정' : '등록') + ' 실패: ' + e.message, 'error'); }
+}
+
+async function productDelete(id) {
+  if (!confirm(`ID ${id} 제품을 삭제하시겠습니까?`)) return;
+  try {
+    await apiFetch('/products/' + id, {method:'DELETE'});
+    if (selectedProductId === id) productReset();
+    await productLoadAll();
+  } catch(e) { setMsg('p-search-msg', '삭제 실패: ' + e.message, 'error'); }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// 주문 관리
+// ═══════════════════════════════════════════════════════════════════
+let allProducts = [];
+
+function genOrderNumber() {
+  return 'ORD-' + Date.now();
+}
+
+function orderFormReset() {
+  document.getElementById('o-user-id').value = '';
+  document.getElementById('o-order-number').value = genOrderNumber();
+  document.getElementById('o-items-container').innerHTML = '';
+  document.getElementById('o-total-amount').value = '0';
+  document.getElementById('o-total-display').textContent = '0';
+  setMsg('o-msg', '');
+  addOrderItem();
+}
+
+function addOrderItem() {
+  const container = document.getElementById('o-items-container');
+  const idx = container.children.length;
+  const opts = allProducts.map(p => `<option value="${p.id}" data-price="${p.price}">${p.name} (${fmtPrice(p.price)})</option>`).join('');
+  const row = document.createElement('div');
+  row.className = 'order-item-row';
+  row.innerHTML = `
+    <div class="form-group" style="flex:3">
+      <label>상품</label>
+      <select class="item-product" onchange="calcTotal()">
+        <option value="">-- 상품 선택 --</option>
+        ${opts}
+      </select>
+    </div>
+    <div class="form-group" style="max-width:90px">
+      <label>수량</label>
+      <input type="number" class="item-qty" min="1" value="1" oninput="calcTotal()"/>
+    </div>
+    <div class="form-group" style="max-width:120px">
+      <label>단가 (원)</label>
+      <input type="number" class="item-price" readonly style="background:#f5f5f5;color:#555"/>
+    </div>
+    <div style="padding-bottom:2px">
+      <button class="btn-danger btn-sm" onclick="removeOrderItem(this)">✕</button>
+    </div>`;
+  container.appendChild(row);
+
+  // 상품 선택 시 단가 자동 설정
+  row.querySelector('.item-product').addEventListener('change', function() {
+    const opt = this.options[this.selectedIndex];
+    row.querySelector('.item-price').value = opt.dataset.price ?? '';
+    calcTotal();
+  });
+}
+
+function removeOrderItem(btn) {
+  btn.closest('.order-item-row').remove();
+  calcTotal();
+}
+
+function calcTotal() {
+  let total = 0;
+  document.querySelectorAll('.order-item-row').forEach(row => {
+    const pid   = row.querySelector('.item-product').value;
+    const qty   = parseInt(row.querySelector('.item-qty').value) || 0;
+    const price = parseFloat(row.querySelector('.item-price').value) || 0;
+    if (pid) total += qty * price;
+  });
+  document.getElementById('o-total-amount').value = total;
+  document.getElementById('o-total-display').textContent = total.toLocaleString();
+}
+
+async function loadUsersForSelect() {
+  try {
+    const users = await apiFetch('/users');
+    const sel = document.getElementById('o-user-id');
+    sel.innerHTML = '<option value="">-- 사용자 선택 --</option>' +
+      users.map(u => `<option value="${u.id}">${u.name} (${u.email})</option>`).join('');
+  } catch(e) { /* 조회 실패 시 무시 */ }
+}
+
+async function loadProductsForSelect() {
+  try {
+    allProducts = await apiFetch('/products');
+    // 이미 추가된 아이템 드롭다운 갱신
+    const opts = allProducts.map(p => `<option value="${p.id}" data-price="${p.price}">${p.name} (${fmtPrice(p.price)})</option>`).join('');
+    document.querySelectorAll('.item-product').forEach(sel => {
+      const cur = sel.value;
+      sel.innerHTML = '<option value="">-- 상품 선택 --</option>' + opts;
+      if (cur) sel.value = cur;
+    });
+  } catch(e) { /* 조회 실패 시 무시 */ }
+}
+
+async function orderCreate() {
+  const userId      = document.getElementById('o-user-id').value;
+  const orderNumber = document.getElementById('o-order-number').value.trim();
+  const totalAmount = parseFloat(document.getElementById('o-total-amount').value) || 0;
+
+  if (!userId)      { setMsg('o-msg', '사용자를 선택하세요.', 'error'); return; }
+  if (totalAmount <= 0) { setMsg('o-msg', '상품을 1개 이상 선택하고 수량을 입력하세요.', 'error'); return; }
+
+  const body = {
+    userId:      parseInt(userId),
+    orderNumber: orderNumber || genOrderNumber(),
+    status:      'PENDING',
+    totalAmount
+  };
+  try {
+    const order = await apiFetch('/orders', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(body)
+    });
+    setMsg('o-msg', `주문 완료 — 주문번호: ${order.orderNumber}, 금액: ${fmtPrice(order.totalAmount)}`, 'success');
+    orderFormReset();
+    await orderLoadAll();
+  } catch(e) { setMsg('o-msg', '주문 실패: ' + e.message, 'error'); }
+}
+
+const STATUS_FLOW = ['PENDING', 'CONFIRMED', 'SHIPPED', 'DELIVERED'];
+
+function statusBadge(status) {
+  return `<span class="status-badge status-${status}">${status}</span>`;
+}
+
+function renderOrders(list) {
+  const arr = Array.isArray(list) ? list : [list];
+  document.getElementById('o-tbody').innerHTML = arr.map(o => {
+    const idx  = STATUS_FLOW.indexOf(o.status);
+    const next = STATUS_FLOW[idx + 1];
+    const canCancel = o.status !== 'CANCELLED' && o.status !== 'DELIVERED';
+    return `
+    <tr>
+      <td>${o.id}</td>
+      <td>${o.orderNumber}</td>
+      <td>${o.userId}</td>
+      <td>${statusBadge(o.status)}</td>
+      <td>${fmtPrice(o.totalAmount)}</td>
+      <td>${fmt(o.createdAt ?? o.created_at)}</td>
+      <td>${next ? `<button class="btn-info btn-sm" onclick="orderNextStatus(${o.id},'${next}')">${next}</button>` : '-'}</td>
+      <td>${canCancel ? `<button class="btn-danger btn-sm" onclick="orderCancel(${o.id})">취소</button>` : '-'}</td>
+    </tr>`;
+  }).join('');
+  setMsg('o-search-msg', '');
+}
+
+async function orderLoadAll() {
+  try { renderOrders(await apiFetch('/orders')); }
+  catch(e) { setMsg('o-search-msg', '오류: ' + e.message, 'error'); }
+}
+
+async function orderSearch() {
+  const id     = document.getElementById('o-search-id').value.trim();
+  const userId = document.getElementById('o-search-user-id').value.trim();
+  try {
+    if (id)          renderOrders(await apiFetch('/orders/' + id));
+    else if (userId) renderOrders(await apiFetch('/orders/user/' + userId));
+    else             renderOrders(await apiFetch('/orders'));
+  } catch(e) { setMsg('o-search-msg', '오류: ' + e.message, 'error'); }
+}
+
+async function orderNextStatus(id, status) {
+  try {
+    await apiFetch('/orders/' + id + '/status', {
+      method: 'PATCH',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({status})
+    });
+    await orderLoadAll();
+  } catch(e) { setMsg('o-search-msg', '상태 변경 실패: ' + e.message, 'error'); }
+}
+
+async function orderCancel(id) {
+  if (!confirm(`주문 ID ${id}를 취소하시겠습니까?`)) return;
+  try {
+    await apiFetch('/orders/' + id + '/cancel', {method: 'POST'});
+    await orderLoadAll();
+  } catch(e) { setMsg('o-search-msg', '취소 실패: ' + e.message, 'error'); }
+}
+
+// ─────────────────────────────────────────
+// 초기 로드
+// ─────────────────────────────────────────
+userLoadAll();
+document.getElementById('o-order-number').value = genOrderNumber();
+addOrderItem();
+
+/*]]>*/
+</script>
+</body>
+</html>
