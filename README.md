@@ -1,120 +1,91 @@
-# Cloud Native Data Pattern - Kafka on Kubernetes
+# Cloud Native Data — CDC & Outbox Pattern 실습
 
-Strimzi Operator를 이용하여 Kubernetes 위에 Kafka 클러스터를 구성하는 가이드입니다.
-
----
-
-## 1. Strimzi Operator 설치
-
-```bash
-./install-strimzi.sh
-```
-
-스크립트가 수행하는 작업:
-
-1. `kafka` 네임스페이스 생성 (이미 존재하면 유지)
-2. Strimzi Operator 최신 버전을 `kafka` 네임스페이스에 설치
-3. `strimzi-cluster-operator` Pod가 `Ready` 상태가 될 때까지 최대 5분 대기
-
-설치 완료 후 확인:
-
-```bash
-kubectl get pods -n kafka -l name=strimzi-cluster-operator
-```
-
-```
-NAME                                       READY   STATUS    RESTARTS   AGE
-strimzi-cluster-operator-xxxxxxxxx-xxxxx   1/1     Running   0          1m
-```
+Strimzi + Debezium 기반의 Kubernetes / Local Docker 환경에서  
+**CDC(Change Data Capture)** 와 **Outbox Pattern** 을 직접 구성하고 검증하는 실습 저장소입니다.
 
 ---
 
-## 2. Kafka 클러스터 설치
+## 전체 아키텍처
 
-```bash
-kubectl apply -f ./kubernetes/kafka
+```
+MariaDB (Source DB)
+   │  Binlog (ROW)
+   ▼
+Debezium Source Connector
+   │  Kafka Topic
+   ▼
+Kafka Cluster (KRaft, Strimzi)
+   │
+   ├──▶ JDBC Sink Connector ──▶ PostgreSQL
+   └──▶ MongoDB Sink Connector ──▶ MongoDB
 ```
 
-> `k` 는 `kubectl` 의 alias입니다. 동일하게 사용 가능합니다.
+**Outbox Pattern** 흐름:
+```
+Producer (Spring Boot) ──▶ MariaDB outbox_events
+                                  │ Debezium EventRouter SMT
+                                  ▼
+                           Kafka Topic (outbox.*)
+                                  │
+                           Consumer (Spring Boot) ──▶ PostgreSQL
+```
 
 ---
 
-## 3. kubernetes/kafka/ 파일 설명
+## 저장소 구조
 
-| 파일명 | CR 종류 (kind) | API 그룹 | 생성되는 리소스 |
-|---|---|---|---|
-| `kafka-nodepool.yaml` | `KafkaNodePool` | `kafka.strimzi.io/v1beta2` | Broker + Controller 역할을 겸하는 Node Pool (1 replica, 100Gi 스토리지) |
-| `kafka-cluster.yaml` | `Kafka` | `kafka.strimzi.io/v1beta2` | Kafka 클러스터 본체. KRaft 모드(ZooKeeper 없음), 내부 9092/9093, 외부 LoadBalancer 9094 포트 구성 |
-| `kafka-topic.yaml` | `KafkaTopic` | `kafka.strimzi.io/v1beta2` | `my-topic` 토픽 (파티션 1, 복제 1, 보존 2시간) |
-| `kafka-user.yaml` | `KafkaUser` | `kafka.strimzi.io/v1beta2` | `my-kafka-user` 사용자 (SCRAM-SHA-512 인증, `my-topic` Read/Write/Create/Describe ACL) |
-| `kafka-client.yaml` | `Pod` | `v1` | Kafka CLI 도구가 포함된 테스트용 클라이언트 Pod (`confluentinc/cp-kafka:7.4.0`) |
-| `harbor-secret.yaml` | `Secret` | `v1` | Private 컨테이너 레지스트리 접근용 이미지 풀 시크릿 (`kubernetes.io/dockerconfigjson` 타입) |
+```
+.
+├── kubernetes/          # Kubernetes 환경 실습
+│   ├── 01.install/      # 인프라 설치 (DB, Strimzi, Kafka, Connect)
+│   ├── 02.cdc/          # CDC 실습 (Source / Sink Connector YAML)
+│   └── 03.outbox/       # Outbox Pattern 실습 (Spring Boot + K8s 배포)
+│
+└── local/               # Local Docker Compose 환경 실습
+    ├── kafka/            # Kafka + Debezium UI
+    ├── kafka-connect/    # Kafka Connect 커스텀 실행
+    ├── kafka-source-connector/   # CDC Source Connector
+    ├── kafka-sink-connector/     # JDBC Sink Connector
+    ├── outbox-source-connector/  # Outbox Source Connector
+    ├── mariadb/          # MariaDB 컨테이너
+    └── pgvector/         # PostgreSQL(pgvector) 컨테이너
+```
 
 ---
 
-## 4. 설치 후 확인
+## 실습 환경별 시작 가이드
 
-### Pod 상태
+### Kubernetes 환경
 
-```bash
-kubectl get pods -n kafka
-```
+| 순서 | 경로 | 내용 |
+|------|------|------|
+| 1 | `kubernetes/01.install/01.database` | MariaDB · PostgreSQL · MongoDB 설치 |
+| 2 | `kubernetes/01.install/02.strimzi-operator` | Strimzi Operator 설치 |
+| 3 | `kubernetes/01.install/03.kafka` | Kafka 클러스터 배포 (KRaft) |
+| 4 | `kubernetes/01.install/04.connect` | Connect 커스텀 이미지 빌드 및 배포 |
+| 5 | `kubernetes/02.cdc` | CDC 파이프라인 (Source → Kafka → Sink) |
+| 6 | `kubernetes/03.outbox` | Outbox Pattern (Producer → Kafka → Consumer) |
 
-```
-NAME                                          READY   STATUS    RESTARTS   AGE
-my-kafka-cluster-kafka-pool-0                 1/1     Running   0          3m
-strimzi-cluster-operator-xxxxxxxxx-xxxxx      1/1     Running   0          5m
-strimzi-entity-operator-xxxxxxxxx-xxxxx       2/2     Running   0          2m
-kafka-client                                  1/1     Running   0          1m
-```
+> 각 디렉토리의 `WHAT.md` → `README.md` → `TEST-GUIDE.md` 순서로 참고하세요.
 
-### Kafka 클러스터 상태
+---
 
-```bash
-kubectl get kafka -n kafka
-```
+## 사전 요구 사항
 
-```
-NAME               DESIRED KAFKA REPLICAS   DESIRED ZK REPLICAS   READY   WARNINGS
-my-kafka-cluster   1                                              True
-```
+| 항목 | 버전 |
+|------|------|
+| Kubernetes | 1.25+ (kubernetes 환경) |
+| Helm | 3+ |
+| Docker / Docker Compose | 최신 |
+| kubectl | 클러스터 버전 호환 |
 
-### 토픽 / 사용자 확인
+---
 
-```bash
-kubectl get kafkatopic -n kafka
-kubectl get kafkauser -n kafka
-```
+## 주요 기술 스택
 
-```
-NAME       CLUSTER            PARTITIONS   REPLICATION FACTOR   READY
-my-topic   my-kafka-cluster   1            1                    True
+- **Kafka** — KRaft 모드 (Strimzi Operator)
+- **Debezium** — MariaDB Source Connector, EventRouter SMT
+- **JDBC Sink Connector** — PostgreSQL
+- **MongoDB Sink Connector** — MongoDB
+- **Spring Boot** — Outbox Producer / Consumer (kubernetes/03.outbox)
 
-NAME            CLUSTER            AUTHENTICATION   AUTHORIZATION   READY
-my-kafka-user   my-kafka-cluster   scram-sha-512    simple          True
-```
-
-### 서비스 확인 (외부 접속 포트)
-
-```bash
-kubectl get svc -n kafka
-```
-
-```
-NAME                                             TYPE           CLUSTER-IP      EXTERNAL-IP     PORT(S)
-my-kafka-cluster-kafka-bootstrap                 ClusterIP      10.x.x.x        <none>          9091/TCP,9092/TCP,9093/TCP
-my-kafka-cluster-kafka-external-bootstrap        LoadBalancer   10.x.x.x        <EXTERNAL_IP>   9094:xxxxx/TCP
-my-kafka-cluster-kafka-pool-0                    ClusterIP      10.x.x.x        <none>          9090/TCP,9091/TCP,9092/TCP,9093/TCP
-my-kafka-cluster-kafka-pool-0-external-0         LoadBalancer   10.x.x.x        <EXTERNAL_IP>   9094:xxxxx/TCP
-```
-
-### 외부 접속 테스트
-
-```bash
-# 클라이언트 Pod에서 토픽 목록 확인
-kubectl exec -it kafka-client -n kafka -- \
-  kafka-topics --bootstrap-server my-kafka-cluster-kafka-external-bootstrap:9094 --list
-
-# 외부에서 직접 접속 (LoadBalancer External IP 사용)
-kafka-topics --bootstrap-server <EXTERNAL_IP>:9094 --list
-```
