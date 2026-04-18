@@ -11,32 +11,53 @@ spec:
   tasksMax: 1
   
   config:
+    # ==========================================
     # 토픽 설정
+    # ==========================================
     #topics: mariadb-cdc.cloud.users
     topics.regex: mariadb-cdc\.cloud\.(users|orders|products)
     
+    # ==========================================
     # 데이터베이스 연결 설정
+    # ==========================================
     connection.url: jdbc:postgresql://postgres-1-postgresql:5432/cloud?tcpKeepAlive=true&socketTimeout=30&connectTimeout=30
     connection.username: skala
     connection.password: Skala25a!23$
     
+    # ==========================================
     # 테이블 및 스키마 설정
+    # ==========================================
     table.name.format: cdc_${source.table}
+    # 테이블이 존재하지 않을 경우 자동 생성 여부
     auto.create: true
+    # 테이블에 컬럼이 추가될경우 자동 추가
     auto.evolve: true
+    # 스키마 진화 설정 (basic: 컬럼 추가만 허용, basic.full: 컬럼 추가/삭제 모두 허용, none: 스키마 진화 비허용)
     schema.evolution: basic
+    # true: 컬럼 이름에 대소문자 구분, false: 컬럼 이름을 소문자로 변환
     quote.identifiers: false
     
+    # ==========================================
     # 삽입 모드 설정
-    #primary.key.fields: id
+    # ==========================================
+    # primary.key.fields: id
+    # insert.mode: insert, upsert, update, delete
     insert.mode: upsert
+    # 어떤 값을 Primary Key로 사용할지 결정
+    # record_key: Kafka 레코드의 key를 Primary Key로 사용 
+    # record_value: Kafka 레코드의 value를 Primary Key로 사용 (value에서 PK 필드 추출 필요)
     primary.key.mode: record_key
+    # delete 이벤트를 실제 삭제로 처리할지 여부
     delete.enabled: true
     
+    # ==========================================
     # 배치 처리 설정
+    # ==========================================
     batch.size: 100
     
+    # ==========================================
     # Hibernate C3P0 커넥션 풀 설정
+    # ==========================================
     hibernate.connection.provider_class: org.hibernate.connection.C3P0ConnectionProvider
     hibernate.c3p0.min_size: 1
     hibernate.c3p0.max_size: 5
@@ -52,14 +73,18 @@ spec:
     hibernate.c3p0.preferredTestQuery: SELECT 1
     hibernate.c3p0.validate: true
     
+    # ==========================================
     # 에러 처리 설정
+    # ==========================================
     errors.tolerance: all
     errors.log.enable: true
     errors.log.include.messages: true
     errors.retry.delay.max.ms: 60000
     errors.retry.timeout: 300000
     
+    # ==========================================
     # Dead Letter Queue 설정
+    # ==========================================
     errors.deadletterqueue.topic.name: dlq-postgresql-sink
     errors.deadletterqueue.topic.replication.factor: 1
     errors.deadletterqueue.context.headers.enable: true

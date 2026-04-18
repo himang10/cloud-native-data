@@ -7,18 +7,26 @@ metadata:
     strimzi.io/use-connector-resources: "true"
 
 spec:
+  # ==========================================
   # 기본 설정
+  # ==========================================
   replicas: 1
   bootstrapServers: my-kafka-cluster-kafka-bootstrap:9092
   image: amdp-registry.skala-ai.com/library/skala-kafka-connect:debezium-3.2.3-kafka-4.0
   version: 4.0.0
 
+  # ==========================================
   # Kafka Connect 설정
+  # ==========================================
   config:
+    # ==========================================
     # 클러스터 설정
+    # ==========================================
     group.id: source-connect-cluster
     
+    # ==========================================
     # 내부 토픽 복제 설정
+    # ==========================================
     config.storage.replication.factor: 1
     config.storage.topic: source-connect-configs
     offset.storage.replication.factor: 1
@@ -26,24 +34,32 @@ spec:
     status.storage.replication.factor: 1
     status.storage.topic: source-connect-status
     
+    # ==========================================
     # 내부 컨버터 설정 (스키마 비활성화)
+    # ==========================================
     internal.key.converter: org.apache.kafka.connect.json.JsonConverter
     internal.key.converter.schemas.enable: false
     internal.value.converter: org.apache.kafka.connect.json.JsonConverter
     internal.value.converter.schemas.enable: false
     
+    # ==========================================
     # 외부 컨버터 설정 (스키마 활성화)
+    # ==========================================
     key.converter: org.apache.kafka.connect.json.JsonConverter
     key.converter.schemas.enable: true
     value.converter: org.apache.kafka.connect.json.JsonConverter
     value.converter.schemas.enable: true
 
+  # ==========================================
   # JVM 메모리 설정
+  # ==========================================
   jvmOptions:
     -Xms: 1g  # 초기 힙 메모리
     -Xmx: 1g  # 최대 힙 메모리
 
+  # ==========================================
   # 리소스 할당
+  # ==========================================
   resources:
     limits:
       cpu: 1000m      # 최대 1 CPU 코어

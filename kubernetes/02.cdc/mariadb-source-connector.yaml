@@ -11,7 +11,9 @@ spec:
   tasksMax: 1
   
   config:
+    # ==========================================
     # 데이터베이스 연결 설정
+    # ==========================================
     database.hostname: mariadb-1.kafka.svc.cluster.local
     database.port: "3306"
     database.user: skala
@@ -19,39 +21,55 @@ spec:
     database.connectionTimeZone: Asia/Seoul
     connect.timeout.ms: "30000"
     
+    # ==========================================
     # 데이터베이스 서버 설정
+    # ==========================================
     database.server.id: "184054"
     topic.prefix: mariadb-cdc
     
+    # ==========================================
     # 캡처 대상 설정
+    # ==========================================
     database.include.list: cloud
     table.include.list: cloud.users,cloud.orders,cloud.products
     include.schema.changes: "false"
     
+    # ==========================================
     # 스냅샷 설정
+    # initial: 최초 실행 시 전체 데이터 스냅샷 후 Binlog 추적
+    # schema_only: 스키마만 스냅샷 (데이터 제외)
+    # ==========================================
     snapshot.mode: initial
     snapshot.locking.mode: minimal
     
+    # ==========================================
     # 스키마 히스토리 설정
+    # ==========================================
     schema.history.internal.kafka.bootstrap.servers: my-kafka-cluster-kafka-bootstrap:9092
     schema.history.internal.kafka.topic: mariadb-schema-changes-v3
 
-    # 히스토리/DDL 처리 관련 (Debezium 3.x)
+    # DDL 파싱 에러 시 계속 진행 (Debezium 3.x)
     schema.history.internal.store.only.captured.tables.ddl: "true"
     schema.history.internal.skip.unparseable.ddl: "true"
     
-    # 토픽 설정
+    # ==========================================
+    # 토픽 자동 생성 설정
+    # ==========================================
     topic.creation.default.partitions: "3"
     topic.creation.default.replication.factor: "1"
     
+    # ==========================================
     # 성능 튜닝 설정
+    # ==========================================
     # queue.size 만큼 모아서 전송 또는 1초 마다 전송 (둘 중 하나 먼저 도달 시 전송)
     # queue는 kafka broker 장애로 일시 전송이 안될 경우 대기할 수 있는 최대 레코드 수
-    max.batch.size: "2048"
-    max.queue.size: "8192"
+    max.batch.size: "100"
+    max.queue.size: "400"
     poll.interval.ms: "1000"
     
+    # ==========================================
     # 에러 처리 설정
+    # ==========================================
     errors.tolerance: none
     errors.log.enable: "true"
     errors.log.include.messages: "true"
