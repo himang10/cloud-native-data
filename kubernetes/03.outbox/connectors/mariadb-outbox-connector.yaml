@@ -2,7 +2,7 @@
 apiVersion: kafka.strimzi.io/v1beta2
 kind: KafkaConnector
 metadata:
-  name: mariadb-outbox-connector-v1.1
+  name: mariadb-outbox-connector-v1.0.0
   namespace: kafka
   labels:
     strimzi.io/cluster: debezium-source-connect
@@ -41,6 +41,7 @@ spec:
     
     # ==========================================
     # 스냅샷 설정
+    # inital or schema_only 또는 schema_only_recovery 모드로 설정하여 초기 스냅샷 수행
     # ==========================================
     snapshot.mode: initial
     snapshot.locking.mode: minimal

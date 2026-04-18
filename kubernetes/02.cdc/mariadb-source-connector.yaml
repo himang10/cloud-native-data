@@ -1,7 +1,7 @@
 apiVersion: kafka.strimzi.io/v1
 kind: KafkaConnector
 metadata:
-  name: mariadb-source-cdc-connector-v1.0.3
+  name: mariadb-source-cdc-connector-v1.0.0
   namespace: kafka
   labels:
     strimzi.io/cluster: debezium-source-connect
@@ -45,6 +45,8 @@ spec:
     topic.creation.default.replication.factor: "1"
     
     # 성능 튜닝 설정
+    # queue.size 만큼 모아서 전송 또는 1초 마다 전송 (둘 중 하나 먼저 도달 시 전송)
+    # queue는 kafka broker 장애로 일시 전송이 안될 경우 대기할 수 있는 최대 레코드 수
     max.batch.size: "2048"
     max.queue.size: "8192"
     poll.interval.ms: "1000"
@@ -53,10 +55,4 @@ spec:
     errors.tolerance: none
     errors.log.enable: "true"
     errors.log.include.messages: "true"
-    
-    # Transform 설정
-    #transforms: unwrap
-    #transforms.unwrap.type: io.debezium.transforms.ExtractNewRecordState
-    #transforms.unwrap.add.fields: op,ts_ms,db,table
-    #transforms.unwrap.drop.tombstones: false
-    #transforms.unwrap.delete.handling.mode: none
+  
