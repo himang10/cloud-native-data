@@ -1,7 +1,7 @@
 # MariaDB Helm Chart values.yaml 구성 (Debezium CDC 지원)
 ## 전역 설정
 global:
-  storageClass: "gp3"
+  storageClass: "gp2"
   security:
     allowInsecureImages: true
 
@@ -35,7 +35,7 @@ primary:
   # 퍼시스턴트 볼륨 설정
   persistence:
     enabled: true
-    storageClass: "gp3"
+    storageClass: "gp2"
     accessModes:
       - ReadWriteOnce
     size: 20Gi

@@ -8,10 +8,10 @@
 
 | 스크립트 | 설명 | 사용법 |
 |---------|------|--------|
-| `test-00-create-outbox-event.sh` | MariaDB `outbox_events` 테이블 생성 | `./test-00-create-outbox-event.sh` |
-| `test-01-insert-outbox-event.sh` | Outbox 테스트 이벤트 삽입 | `./test-01-insert-outbox-event.sh` |
-| `test-02-check-kafka-topic.sh` | Kafka 토픽 메시지 확인 | `./test-02-check-kafka-topic.sh` |
-| `test-03-test-consumer.sh` | Consumer 애플리케이션 테스트 | `./test-03-test-consumer.sh` |
+| `00.create-outbox-event.sh` | MariaDB `outbox_events` 테이블 생성 | `./00.create-outbox-event.sh` |
+| `01.insert-outbox-event.sh` | Outbox 테스트 이벤트 삽입 | `./01.insert-outbox-event.sh` |
+| `02.check-kafka-topic.sh` | Kafka 토픽 메시지 확인 | `./02.check-kafka-topic.sh` |
+| `03.test-consumer.sh` | Consumer 애플리케이션 테스트 | `./03.test-consumer.sh` |
 | `fix-connector-ddl-error.sh` | DDL 파싱 에러 해결 (트러블슈팅) | `./fix-connector-ddl-error.sh` |
 
 ---
@@ -21,7 +21,7 @@
 | 항목 | 값 |
 |------|-----|
 | MariaDB Namespace | `mariadb` |
-| MariaDB Pod | `mariadb-1-0` |
+| MariaDB Pod | `mariadb-1` |
 | MariaDB Container | `mariadb` |
 | MariaDB 바이너리 | `/opt/bitnami/mariadb/bin/mariadb` |
 | MariaDB 사용자 | `skala` / `Skala25a!23$` |
@@ -39,17 +39,16 @@
 
 ```bash
 # 0단계: outbox_events 테이블이 없으면 생성 (최초 1회)
-./test-00-create-outbox-event.sh
+bash 00.create-outbox-event.sh
 
 # 1단계: 테스트 이벤트 삽입
-./test-01-insert-outbox-event.sh
+bash 01.insert-outbox-event.sh
 
 # 2단계: Kafka 토픽 메시지 확인 (5~10초 대기 권장)
-sleep 10
-./test-02-check-kafka-topic.sh
+bash 02.check-kafka-topic.sh
 
 # 3단계: Consumer 확인
-./test-03-test-consumer.sh
+bash 03.test-consumer.sh
 ```
 
 ---
@@ -62,22 +61,22 @@ sleep 10
 └─────────────────────────────────────────────────────────────┘
 
   0️⃣  outbox_events 테이블 생성 (최초 1회)
-      └─ test-00-create-outbox-event.sh
+      └─ 00.create-outbox-event.sh
           ↓
   1️⃣  MariaDB에 Outbox Event 삽입
-      └─ test-01-insert-outbox-event.sh
+      └─ 01.insert-outbox-event.sh
           ↓
       [MariaDB: cloud.outbox_events]
           ↓
       [Debezium CDC - Binlog 감지]
           ↓
   2️⃣  Kafka 토픽에 메시지 발행
-      └─ test-02-check-kafka-topic.sh
+      └─ 02.check-kafka-topic.sh
           ↓
       [Kafka Topic: outbox.user]
           ↓
   3️⃣  Consumer가 메시지 수신
-      └─ test-03-test-consumer.sh
+      └─ 03.test-consumer.sh
           ↓
       [outbox-consumer Pod (namespace: kafka)]
 ```
@@ -247,7 +246,7 @@ kubectl logs -n kafka -l strimzi.io/cluster=debezium-source-connect --tail=50
 **확인:**
 ```bash
 # MariaDB Binlog 상태 확인
-kubectl exec -n mariadb mariadb-1-0 -c mariadb -- \
+kubectl exec -n mariadb mariadb-1 -c mariadb -- \
   /opt/bitnami/mariadb/bin/mariadb -u skala -pSkala25a\!23\$ cloud \
   -e "SHOW VARIABLES LIKE 'log_bin';"
 
@@ -321,7 +320,7 @@ kubectl logs -n kafka -f -l app=outbox-consumer
 
 **MariaDB outbox_events 직접 확인:**
 ```bash
-kubectl exec -n mariadb mariadb-1-0 -c mariadb -- \
+kubectl exec -n mariadb mariadb-1 -c mariadb -- \
   /opt/bitnami/mariadb/bin/mariadb -u skala -pSkala25a\!23\$ cloud \
   -e "SELECT id, event_id, aggregate_type, event_type, occurred_at, processed FROM outbox_events ORDER BY occurred_at DESC LIMIT 10;"
 ```

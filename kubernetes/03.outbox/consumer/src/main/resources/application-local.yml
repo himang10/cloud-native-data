@@ -32,7 +32,7 @@ spring:
   
   # Kafka 설정 (Debezium Outbox Event 처리용)
   kafka:
-    bootstrap-servers: k8s-kafka-mykafkac-b9fecf9b07-95f6489e928361c3.elb.ap-northeast-2.amazonaws.com:9094
+    bootstrap-servers: a40ac5495d21c448d8e525a310d57bb5-2d987132cacba8c5.elb.ap-northeast-2.amazonaws.com:9094
     
     consumer:
       group-id: outbox-consumer-group

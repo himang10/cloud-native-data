@@ -4,7 +4,7 @@
 
 ## Global 설정
 global:
-  defaultStorageClass: "gp3"
+  defaultStorageClass: "gp2"
   valkey:
     password: "Skala25a!23$"
 
@@ -69,7 +69,7 @@ primary:
   # 스토리지 설정
   persistence:
     enabled: true
-    storageClass: "gp3"
+    storageClass: "gp2"
     size: 20Gi
     accessModes:
       - ReadWriteOnce

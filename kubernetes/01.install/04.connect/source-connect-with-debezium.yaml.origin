@@ -1,7 +1,7 @@
-apiVersion: kafka.strimzi.io/v1
+apiVersion: kafka.strimzi.io/v1beta2
 kind: KafkaConnect
 metadata:
-  name: jdbc-sink-connect
+  name: debezium-source-connect
   namespace: kafka
   annotations:
     strimzi.io/use-connector-resources: "true"
@@ -16,38 +16,32 @@ spec:
   version: 4.0.0
 
   # ==========================================
-  # v1 API 필수 필드 (v1beta2에서는 config 하위였음)
-  # ==========================================
-  groupId: sink-connect-cluster
-  configStorageTopic: sink-configs
-  offsetStorageTopic: sink-offsets
-  statusStorageTopic: sink-status
-
-  # ==========================================
   # Kafka Connect 설정
   # ==========================================
   config:
     # ==========================================
+    # 클러스터 설정
+    # ==========================================
+    group.id: source-connect-cluster
+    
+    # ==========================================
     # 내부 토픽 복제 설정
     # ==========================================
     config.storage.replication.factor: 1
+    config.storage.topic: source-connect-configs
     offset.storage.replication.factor: 1
+    offset.storage.topic: source-connect-offsets
     status.storage.replication.factor: 1
-
+    status.storage.topic: source-connect-status
+    
     # ==========================================
-    # Consumer 설정
+    # 내부 컨버터 설정 (스키마 비활성화)
     # ==========================================
-    consumer.fetch.max.wait.ms: 500
-    consumer.fetch.min.bytes: 1024
-    consumer.max.poll.interval.ms: 300000
-    consumer.max.poll.records: 500
-
-    # ==========================================
-    # 에러 처리 설정
-    # ==========================================
-    errors.retry.delay.max.ms: 60000
-    errors.retry.timeout: -1
-
+    internal.key.converter: org.apache.kafka.connect.json.JsonConverter
+    internal.key.converter.schemas.enable: false
+    internal.value.converter: org.apache.kafka.connect.json.JsonConverter
+    internal.value.converter.schemas.enable: false
+    
     # ==========================================
     # 외부 컨버터 설정 (스키마 활성화)
     # ==========================================
@@ -60,16 +54,16 @@ spec:
   # JVM 메모리 설정
   # ==========================================
   jvmOptions:
-    -Xms: 1g
-    -Xmx: 1g
+    -Xms: 1g  # 초기 힙 메모리
+    -Xmx: 1g  # 최대 힙 메모리
 
   # ==========================================
   # 리소스 할당
   # ==========================================
   resources:
     limits:
-      cpu: 1000m
-      memory: 2Gi
+      cpu: 1000m      # 최대 1 CPU 코어
+      memory: 2Gi     # 최대 2GB 메모리
     requests:
-      cpu: 500m
-      memory: 1Gi
+      cpu: 500m       # 최소 0.5 CPU 코어
+      memory: 1Gi     # 최소 1GB 메모리

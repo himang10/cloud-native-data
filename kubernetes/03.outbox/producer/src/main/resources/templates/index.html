@@ -387,6 +387,7 @@ async function apiFetch(path, options = {}) {
 
 function setMsg(id, text, type) {
   const el = document.getElementById(id);
+  if (!el) return;
   el.textContent = text;
   el.className = 'msg ' + (type ?? '');
 }
@@ -426,7 +427,7 @@ function userReset() {
   ['u-id','u-name','u-email'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('u-btn-create').style.display = '';
   document.getElementById('u-btn-update').style.display = 'none';
-  document.getElementById('u-form-title').textContent = '사용자 등록';
+  document.getElementById('user-form-title').textContent = '사용자 등록';
   setMsg('u-msg', '');
   document.querySelectorAll('#u-tbody tr.selected').forEach(r => r.classList.remove('selected'));
 }
@@ -438,7 +439,7 @@ function userSelectRow(id, name, email) {
   document.getElementById('u-email').value = email;
   document.getElementById('u-btn-create').style.display = 'none';
   document.getElementById('u-btn-update').style.display = '';
-  document.getElementById('u-form-title').textContent = '사용자 수정';
+  document.getElementById('user-form-title').textContent = '사용자 수정';
   document.querySelectorAll('#u-tbody tr').forEach(r => r.classList.remove('selected'));
   document.getElementById('u-row-' + id)?.classList.add('selected');
 }

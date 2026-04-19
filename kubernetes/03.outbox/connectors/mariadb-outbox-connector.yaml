@@ -1,5 +1,5 @@
 ---
-apiVersion: kafka.strimzi.io/v1beta2
+apiVersion: kafka.strimzi.io/v1
 kind: KafkaConnector
 metadata:
   name: mariadb-outbox-connector-v1.0.0

@@ -6,7 +6,7 @@
 set -e
 
 MARIADB_NAMESPACE="mariadb"
-MARIADB_POD="mariadb-1-0"
+MARIADB_POD="mariadb-1"
 MARIADB_CONTAINER="mariadb"
 MARIADB_USER="skala"
 MARIADB_PASSWORD="Skala25a!23$"

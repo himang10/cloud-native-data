@@ -4,6 +4,40 @@
 
 ---
 
+## 전체 실행 흐름
+
+```
+01.kafka-nodepool.yaml          # KafkaNodePool: 브로커/컨트롤러 노드 풀 생성
+        ↓
+02.kafka-cluster.yaml           # Kafka: 클러스터 생성 (KRaft 모드)
+        ↓
+03.kafka-client.yaml            # Pod: 메시지 송수신 테스트용 클라이언트 파드 배포
+        ↓
+04.kafka-topic.yaml             # KafkaTopic: 테스트용 토픽 생성
+        ↓
+05.test-kafka.sh                # 메시지 송수신 최종 검증 테스트 실행
+```
+
+**한 번에 순서대로 적용:**
+```bash
+kubectl apply -f 01.kafka-nodepool.yaml
+kubectl apply -f 02.kafka-cluster.yaml
+
+# 클러스터 준비 대기
+kubectl wait kafka/my-kafka-cluster --for=condition=Ready --timeout=300s -n kafka
+
+kubectl apply -f 03.kafka-client.yaml
+kubectl apply -f 04.kafka-topic.yaml
+
+# 테스트 파드 준비 대기
+kubectl wait pod/kafka-client --for=condition=Ready --timeout=120s -n kafka
+
+# 자동 테스트 실행
+bash 05.test-kafka.sh
+```
+
+---
+
 ## 사전 준비 사항
 
 | 항목 | 확인 명령 | 기대 결과 |
@@ -109,45 +143,16 @@ kubectl get kafkatopic -n kafka
 |------|---------|------------|--------------------|-------|
 | my-topic | my-kafka-cluster | 1 | 1 | True |
 
----
-
-## Step 5: KafkaUser 생성
-
-SCRAM-SHA-512 인증으로 토픽에 접근할 사용자를 생성합니다.
-
-```bash
-kubectl apply -f kafka-user.yaml
-```
-
-**생성 확인:**
-```bash
-kubectl get kafkauser -n kafka
-```
-
-| NAME | CLUSTER | AUTHENTICATION | AUTHORIZATION | READY |
-|------|---------|----------------|---------------|-------|
-| my-kafka-user | my-kafka-cluster | scram-sha-512 | simple | True |
-
-KafkaUser가 Ready 상태가 되면 Strimzi가 자동으로 비밀번호 시크릿을 생성합니다:
-
-```bash
-kubectl get secret my-kafka-user -n kafka
-```
 
 ---
 
-## Step 6: 테스트 파드 배포
+## Step 5: 테스트 파드 배포 및 자동 테스트
 
-Kafka 클라이언트 도구가 설치된 테스트 파드를 배포합니다.
-
-> Private registry를 사용하는 경우 harbor-secret.yaml을 먼저 적용하세요.
+Kafka 클라이언트 도구가 설치된 테스트 파드를 배포하고 `05.test-kafka.sh`로 자동 검증합니다.
 
 ```bash
-# (필요한 경우) registry 시크릿 적용
-kubectl apply -f harbor-secret.yaml
-
 # 테스트 파드 배포
-kubectl apply -f kafka-client.yaml
+kubectl apply -f 03.kafka-client.yaml
 ```
 
 **파드 준비 대기:**
@@ -158,9 +163,23 @@ kubectl wait pod/kafka-client \
   -n kafka
 ```
 
+**자동 테스트 실행:**
+```bash
+bash 05.test-kafka.sh
+```
+
+**예상 출력:**
+```
+[INFO] Kafka 클러스터 연결 확인...
+[INFO] 토픽 목록 조회 성공
+[INFO] 메시지 전송 완료
+[INFO] 메시지 수신 완료
+[PASS] Kafka 테스트 성공
+```
+
 ---
 
-## Step 7: 메시지 전송 (Producer)
+## Step 6: 메시지 전송 수동 테스트 (Producer)
 
 새 터미널을 열고 Producer로 메시지를 전송합니다.
 
@@ -183,7 +202,7 @@ kubectl exec -it kafka-client -n kafka -- \
 
 ---
 
-## Step 8: 메시지 수신 (Consumer)
+## Step 7: 메시지 수신 수동 테스트 (Consumer)
 
 다른 터미널에서 Consumer로 메시지를 수신합니다.
 
@@ -206,42 +225,7 @@ Test message 2
 
 ---
 
-## Step 9: SCRAM 인증 테스트 (선택)
-
-KafkaUser 인증을 사용하는 연결 테스트입니다.
-
-**비밀번호 추출:**
-```bash
-kubectl get secret my-kafka-user \
-  -n kafka \
-  -o jsonpath='{.data.password}' \
-  | base64 --decode
-```
-
-**JAAS 설정 파일 생성 (파드 내부):**
-```bash
-kubectl exec -it kafka-client -n kafka -- bash -c '
-cat > /tmp/jaas.conf << EOF
-KafkaClient {
-  org.apache.kafka.common.security.scram.ScramLoginModule required
-  username="my-kafka-user"
-  password="<위에서 추출한 비밀번호>";
-};
-EOF'
-```
-
-**인증 연결 테스트:**
-```bash
-kubectl exec -it kafka-client -n kafka -- \
-  kafka-topics \
-    --bootstrap-server my-kafka-cluster-kafka-bootstrap:9092 \
-    --list \
-    --command-config /tmp/client.properties
-```
-
----
-
-## Step 10: 서비스 엔드포인트 확인
+## Step 8: 서비스 엔드포인트 확인
 
 ```bash
 # 서비스 목록 확인
@@ -303,14 +287,3 @@ kubectl exec -it kafka-client -n kafka -- \
 - `--from-beginning` 옵션 확인 (이미 오프셋이 지났을 경우)
 - Producer가 올바른 토픽 이름으로 전송했는지 확인
 
----
-
-## 전체 정리 (실습 종료 후)
-
-```bash
-kubectl delete -f kafka-client.yaml
-kubectl delete -f kafka-user.yaml
-kubectl delete -f kafka-topic.yaml
-kubectl delete -f 02.kafka-cluster.yaml
-kubectl delete -f 01.kafka-nodepool.yaml
-```

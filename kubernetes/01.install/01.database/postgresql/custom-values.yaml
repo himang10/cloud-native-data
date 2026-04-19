@@ -6,7 +6,7 @@ global:
       username: "skala"
       password: "Skala25a!23$"
       database: "cloud"
-  defaultStorageClass: "gp3"
+  defaultStorageClass: "gp2"
   security:
     allowInsecureImages: true
 
@@ -39,7 +39,7 @@ primary:
   # 영구 스토리지 설정
   persistence:
     enabled: true
-    storageClass: "gp3"
+    storageClass: "gp2"
     accessModes:
       - ReadWriteOnce
     size: "20Gi"
@@ -132,7 +132,7 @@ readReplicas:
   
   persistence:
     enabled: true
-    storageClass: "gp3"
+    storageClass: "gp2"
     accessModes:
       - ReadWriteOnce
     size: 20Gi

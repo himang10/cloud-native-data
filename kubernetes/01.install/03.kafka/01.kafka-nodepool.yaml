@@ -1,29 +1,67 @@
+# ==========================================
+# KafkaNodePool
+# ==========================================
+# 주요 개념:
+#   - KafkaCluster(02.kafka-cluster.yaml)와 strimzi.io/cluster 라벨로 연결됩니다.
+#   - 하나의 클러스터에 여러 KafkaNodePool을 만들어 역할별로 노드를 분리할 수 있습니다.
+#     예) broker 전용 pool + controller 전용 pool (운영 환경 권장)
+#   - 개발/실습 환경에서는 broker + controller를 하나의 pool에 함께 설정합니다.
+#
+# 역할(roles):
+#   - broker:     Kafka 토픽의 메시지를 저장하고 Producer/Consumer와 통신
+#   - controller: KRaft 메타데이터 관리 (ZooKeeper 역할 대체), 리더 선출 담당
+#
+# 스토리지(JBOD):
+#   - type: jbod (Just a Bunch Of Disks): 여러 볼륨을 독립적으로 사용하는 방식
+#   - persistent-claim: Kubernetes PVC를 사용한 영구 스토리지
+#   - deleteClaim: false → Pod 삭제 시에도 PVC(데이터) 보존
+# ==========================================
 apiVersion: kafka.strimzi.io/v1
 kind: KafkaNodePool
 metadata:
   name: kafka-pool
   namespace: kafka
   labels:
+    # 이 NodePool이 속할 KafkaCluster 이름
     strimzi.io/cluster: my-kafka-cluster
 spec:
   replicas: 1
+
+  # ==========================================
+  # 노드 역할 설정
+  # ==========================================
+  # broker + controller 겸용 (개발 환경용 단순 구성)
+  # 운영 환경에서는 pool을 분리하여 broker 전용 / controller 전용으로 구성 권장
   roles:
-    - broker
-    - controller
+    - broker      # 메시지 저장 및 Producer/Consumer 통신 담당
+    - controller  # KRaft 메타데이터 관리 및 리더 선출 담당 (ZooKeeper 대체)
+
+  # ==========================================
+  # 스토리지 설정
+  # ==========================================
   storage:
-    type: jbod
+    type: jbod  # 여러 볼륨을 독립적으로 관리 (Kafka 권장 방식)
     volumes:
     - id: 0
-      type: persistent-claim
-      size: 10Gi
-      deleteClaim: false
+      type: persistent-claim   # Kubernetes PVC 사용 (영구 스토리지)
+      size: 10Gi               # 볼륨 크기 (토픽 데이터 보존 기간/크기에 따라 조정)
+      deleteClaim: false       # false: Pod 삭제 시에도 PVC 유지 (데이터 보존)
+
+  # ==========================================
+  # 리소스 할당
+  # ==========================================
   resources:
     requests:
-      cpu: 500m
-      memory: 1Gi
+      cpu: 500m     # 최소 0.5 CPU 코어
+      memory: 1Gi   # 최소 1GB 메모리
     limits:
-      cpu: 1000m
-      memory: 2Gi
+      cpu: 1000m    # 최대 1 CPU 코어
+      memory: 2Gi   # 최대 2GB 메모리
+
+  # ==========================================
+  # JVM 메모리 설정
+  # ==========================================
+  # Kafka Broker JVM 힙 크기 (메모리 limits의 50% 수준 권장)
   jvmOptions:
-    -Xms: 1g
-    -Xmx: 1g
+    -Xms: 1g  # 초기 힙 메모리
+    -Xmx: 1g  # 최대 힙 메모리

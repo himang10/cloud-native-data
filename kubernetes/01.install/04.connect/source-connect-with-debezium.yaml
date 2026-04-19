@@ -1,4 +1,4 @@
-apiVersion: kafka.strimzi.io/v1beta2
+apiVersion: kafka.strimzi.io/v1
 kind: KafkaConnect
 metadata:
   name: debezium-source-connect
@@ -16,32 +16,24 @@ spec:
   version: 4.0.0
 
   # ==========================================
+  # v1 API 필수 필드 (v1beta2에서는 config 하위였음)
+  # ==========================================
+  groupId: source-connect-cluster
+  configStorageTopic: source-connect-configs
+  offsetStorageTopic: source-connect-offsets
+  statusStorageTopic: source-connect-status
+
+  # ==========================================
   # Kafka Connect 설정
   # ==========================================
   config:
     # ==========================================
-    # 클러스터 설정
-    # ==========================================
-    group.id: source-connect-cluster
-    
-    # ==========================================
     # 내부 토픽 복제 설정
     # ==========================================
     config.storage.replication.factor: 1
-    config.storage.topic: source-connect-configs
     offset.storage.replication.factor: 1
-    offset.storage.topic: source-connect-offsets
     status.storage.replication.factor: 1
-    status.storage.topic: source-connect-status
-    
-    # ==========================================
-    # 내부 컨버터 설정 (스키마 비활성화)
-    # ==========================================
-    internal.key.converter: org.apache.kafka.connect.json.JsonConverter
-    internal.key.converter.schemas.enable: false
-    internal.value.converter: org.apache.kafka.connect.json.JsonConverter
-    internal.value.converter.schemas.enable: false
-    
+
     # ==========================================
     # 외부 컨버터 설정 (스키마 활성화)
     # ==========================================
@@ -54,16 +46,16 @@ spec:
   # JVM 메모리 설정
   # ==========================================
   jvmOptions:
-    -Xms: 1g  # 초기 힙 메모리
-    -Xmx: 1g  # 최대 힙 메모리
+    -Xms: 1g
+    -Xmx: 1g
 
   # ==========================================
   # 리소스 할당
   # ==========================================
   resources:
     limits:
-      cpu: 1000m      # 최대 1 CPU 코어
-      memory: 2Gi     # 최대 2GB 메모리
+      cpu: 1000m
+      memory: 2Gi
     requests:
-      cpu: 500m       # 최소 0.5 CPU 코어
-      memory: 1Gi     # 최소 1GB 메모리
+      cpu: 500m
+      memory: 1Gi

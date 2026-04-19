@@ -1,5 +1,5 @@
 #!/bin/bash
 
-NAMESPACE="mariadb"
+NAMESPACE="kafka"
 
 helm uninstall mariadb-1 --namespace ${NAMESPACE}

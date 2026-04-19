@@ -6,7 +6,7 @@
 set -e
 
 NAMESPACE="kafka"
-POD="mariadb-1-0"
+POD="mariadb-1"
 CONTAINER="mariadb"
 DB_USER="root"
 DB_PASSWORD="Skala25a!23\$"

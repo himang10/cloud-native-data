@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Outbox Consumer 모니터</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body { font-family: 'Segoe UI', sans-serif; margin: 0; background: #f4f5f7; color: #333; }
+
+    /* ── 헤더 ── */
+    header {
+      background: #1a2e1a;
+      color: #fff;
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    header h1 { margin: 0; font-size: 20px; font-weight: 700; }
+    header .badge {
+      background: #4caf50;
+      border-radius: 4px;
+      padding: 2px 8px;
+      font-size: 12px;
+    }
+    header .badge-info {
+      background: #1976d2;
+      border-radius: 4px;
+      padding: 2px 8px;
+      font-size: 12px;
+    }
+
+    /* ── 탭 ── */
+    .tabs {
+      display: flex;
+      background: #fff;
+      border-bottom: 2px solid #e0e0e0;
+      padding: 0 24px;
+    }
+    .tab {
+      padding: 14px 22px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+      color: #666;
+      border-bottom: 3px solid transparent;
+      margin-bottom: -2px;
+      transition: all .15s;
+    }
+    .tab:hover { color: #4caf50; }
+    .tab.active { color: #4caf50; border-bottom-color: #4caf50; }
+
+    /* ── 컨텐츠 ── */
+    .content { padding: 24px; max-width: 1100px; margin: 0 auto; }
+    .panel { display: none; }
+    .panel.active { display: block; }
+
+    /* ── 카드 ── */
+    .card {
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 1px 4px rgba(0,0,0,.08);
+      padding: 20px 24px;
+      margin-bottom: 20px;
+    }
+    .card-title {
+      font-size: 15px;
+      font-weight: 700;
+      margin: 0 0 16px;
+      color: #1a2e1a;
+      border-bottom: 2px solid #4caf50;
+      padding-bottom: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .record-count {
+      font-size: 12px;
+      font-weight: 400;
+      color: #888;
+      background: #f0f0f0;
+      padding: 2px 8px;
+      border-radius: 10px;
+    }
+
+    /* ── 컨트롤 ── */
+    .ctrl-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+    }
+    input[type="number"], input[type="text"] {
+      padding: 7px 10px;
+      font-size: 13px;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      outline: none;
+      width: 130px;
+    }
+    input:focus { border-color: #4caf50; }
+    button {
+      padding: 7px 14px;
+      font-size: 13px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: opacity .15s;
+    }
+    button:hover { opacity: .85; }
+    .btn-primary   { background: #4caf50; color: #fff; }
+    .btn-secondary { background: #6c757d; color: #fff; }
+    .btn-sm { padding: 5px 10px; font-size: 12px; }
+
+    /* ── 메시지 ── */
+    .msg { font-size: 13px; min-height: 18px; color: #dc3545; margin-bottom: 8px; }
+
+    /* ── 테이블 ── */
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { border: 1px solid #e8e8e8; padding: 9px 12px; text-align: left; vertical-align: middle; }
+    th { background: #f1f8f1; font-weight: 700; color: #2e5e2e; white-space: nowrap; }
+    tr:hover td { background: #f0fff0; }
+
+    /* ── 이벤트 타입 뱃지 ── */
+    .ev-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .ev-created { background: #d4edda; color: #155724; }
+    .ev-updated { background: #cce5ff; color: #004085; }
+    .ev-deleted { background: #f8d7da; color: #721c24; }
+
+    /* ── 상태 뱃지 ── */
+    .st-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .st-PENDING   { background: #fff3cd; color: #856404; }
+    .st-CONFIRMED { background: #d1ecf1; color: #0c5460; }
+    .st-SHIPPED   { background: #cce5ff; color: #004085; }
+    .st-DELIVERED { background: #d4edda; color: #155724; }
+    .st-CANCELLED { background: #f8d7da; color: #721c24; }
+
+    /* ── 자동 새로고침 ── */
+    .auto-refresh-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: #555;
+    }
+    .auto-refresh-row input[type="checkbox"] { width: auto; }
+    .last-refreshed { font-size: 11px; color: #aaa; margin-left: auto; }
+  </style>
+</head>
+<body>
+
+<!-- ━━━ 헤더 ━━━ -->
+<header>
+  <h1>Outbox Consumer 모니터</h1>
+  <span class="badge">Kafka Consumer</span>
+  <span class="badge-info">PostgreSQL</span>
+</header>
+
+<!-- ━━━ 탭 ━━━ -->
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('user', this)">👤 사용자 Summary</div>
+  <div class="tab" onclick="switchTab('product', this)">📦 제품 Summary</div>
+  <div class="tab" onclick="switchTab('order', this)">🛒 주문 Summary</div>
+</div>
+
+<!-- ━━━ 컨텐츠 ━━━ -->
+<div class="content">
+
+  <!-- ============================================================ -->
+  <!-- 사용자 Summary 패널 -->
+  <!-- ============================================================ -->
+  <div id="panel-user" class="panel active">
+    <div class="card">
+      <div class="card-title">
+        사용자 Summary
+        <span class="record-count" id="u-count">0 건</span>
+      </div>
+      <div class="ctrl-row">
+        <input type="number" id="u-search-id" placeholder="User ID"/>
+        <button class="btn-primary btn-sm" onclick="userSearch()">검색</button>
+        <button class="btn-secondary btn-sm" onclick="userLoadAll()">전체 조회</button>
+        <div class="auto-refresh-row">
+          <input type="checkbox" id="u-auto" onchange="toggleAutoRefresh('user')"/>
+          <label for="u-auto">자동 새로고침 (5s)</label>
+          <span class="last-refreshed" id="u-refreshed"></span>
+        </div>
+      </div>
+      <div class="msg" id="u-msg"></div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>User ID</th>
+              <th>이름</th>
+              <th>이메일</th>
+              <th>이벤트 타입</th>
+              <th>소스 생성일</th>
+              <th>소스 수정일</th>
+              <th>수신일</th>
+            </tr>
+          </thead>
+          <tbody id="u-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- 제품 Summary 패널 -->
+  <!-- ============================================================ -->
+  <div id="panel-product" class="panel">
+    <div class="card">
+      <div class="card-title">
+        제품 Summary
+        <span class="record-count" id="p-count">0 건</span>
+      </div>
+      <div class="ctrl-row">
+        <input type="number" id="p-search-id" placeholder="Product ID"/>
+        <button class="btn-primary btn-sm" onclick="productSearch()">검색</button>
+        <button class="btn-secondary btn-sm" onclick="productLoadAll()">전체 조회</button>
+        <div class="auto-refresh-row">
+          <input type="checkbox" id="p-auto" onchange="toggleAutoRefresh('product')"/>
+          <label for="p-auto">자동 새로고침 (5s)</label>
+          <span class="last-refreshed" id="p-refreshed"></span>
+        </div>
+      </div>
+      <div class="msg" id="p-msg"></div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Product ID</th>
+              <th>제품명</th>
+              <th>설명</th>
+              <th>가격 (원)</th>
+              <th>재고</th>
+              <th>이벤트 타입</th>
+              <th>소스 생성일</th>
+              <th>수신일</th>
+            </tr>
+          </thead>
+          <tbody id="p-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- 주문 Summary 패널 -->
+  <!-- ============================================================ -->
+  <div id="panel-order" class="panel">
+    <div class="card">
+      <div class="card-title">
+        주문 Summary
+        <span class="record-count" id="o-count">0 건</span>
+      </div>
+      <div class="ctrl-row">
+        <input type="number" id="o-search-id" placeholder="Order ID"/>
+        <input type="number" id="o-search-user-id" placeholder="User ID"/>
+        <button class="btn-primary btn-sm" onclick="orderSearch()">검색</button>
+        <button class="btn-secondary btn-sm" onclick="orderLoadAll()">전체 조회</button>
+        <div class="auto-refresh-row">
+          <input type="checkbox" id="o-auto" onchange="toggleAutoRefresh('order')"/>
+          <label for="o-auto">자동 새로고침 (5s)</label>
+          <span class="last-refreshed" id="o-refreshed"></span>
+        </div>
+      </div>
+      <div class="msg" id="o-msg"></div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Order ID</th>
+              <th>주문번호</th>
+              <th>User ID</th>
+              <th>상태</th>
+              <th>총금액 (원)</th>
+              <th>이벤트 타입</th>
+              <th>소스 생성일</th>
+              <th>수신일</th>
+            </tr>
+          </thead>
+          <tbody id="o-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /content -->
+
+<script th:inline="javascript">
+/*<![CDATA[*/
+
+const BASE = '/api/summary';
+
+// ─────────────────────────────────────────
+// 공통 유틸
+// ─────────────────────────────────────────
+async function apiFetch(path) {
+  const res = await fetch(BASE + path);
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.message ?? `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+function setMsg(id, text) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = text;
+}
+
+function fmt(dt) {
+  if (!dt) return '-';
+  return String(dt).replace('T', ' ').substring(0, 16);
+}
+
+function fmtPrice(n) {
+  if (n == null) return '-';
+  return Number(n).toLocaleString();
+}
+
+function evBadge(type) {
+  const cls = type === 'created' ? 'ev-created'
+            : type === 'updated' ? 'ev-updated'
+            : type === 'deleted' ? 'ev-deleted' : '';
+  return `<span class="ev-badge ${cls}">${type ?? '-'}</span>`;
+}
+
+function stBadge(status) {
+  return `<span class="st-badge st-${status ?? ''}">${status ?? '-'}</span>`;
+}
+
+function nowStr() {
+  return new Date().toLocaleTimeString();
+}
+
+// ─────────────────────────────────────────
+// 탭 전환
+// ─────────────────────────────────────────
+function switchTab(name, el) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('panel-' + name).classList.add('active');
+  el.classList.add('active');
+  if (name === 'user')    userLoadAll();
+  if (name === 'product') productLoadAll();
+  if (name === 'order')   orderLoadAll();
+}
+
+// ─────────────────────────────────────────
+// 자동 새로고침
+// ─────────────────────────────────────────
+const timers = {};
+
+function toggleAutoRefresh(tab) {
+  const cb = document.getElementById(tab.charAt(0) + '-auto');
+  if (cb.checked) {
+    const fn = tab === 'user'    ? userLoadAll
+             : tab === 'product' ? productLoadAll
+             : orderLoadAll;
+    timers[tab] = setInterval(fn, 5000);
+  } else {
+    clearInterval(timers[tab]);
+    delete timers[tab];
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// 사용자 Summary
+// ═══════════════════════════════════════════════════════════════════
+function renderUsers(list) {
+  const arr = Array.isArray(list) ? list : [list];
+  document.getElementById('u-tbody').innerHTML = arr.map(u => `
+    <tr>
+      <td>${u.userId}</td>
+      <td>${u.name ?? '-'}</td>
+      <td>${u.email ?? '-'}</td>
+      <td>${evBadge(u.eventType)}</td>
+      <td>${fmt(u.sourceCreatedAt)}</td>
+      <td>${fmt(u.sourceUpdatedAt)}</td>
+      <td>${fmt(u.consumedAt)}</td>
+    </tr>`).join('');
+  document.getElementById('u-count').textContent = arr.length + ' 건';
+  document.getElementById('u-refreshed').textContent = '최종: ' + nowStr();
+  setMsg('u-msg', '');
+}
+
+async function userLoadAll() {
+  try { renderUsers(await apiFetch('/users')); }
+  catch(e) { setMsg('u-msg', '조회 실패: ' + e.message); }
+}
+
+async function userSearch() {
+  const id = document.getElementById('u-search-id').value.trim();
+  try {
+    renderUsers(id ? await apiFetch('/users/' + id) : await apiFetch('/users'));
+  } catch(e) { setMsg('u-msg', '조회 실패: ' + e.message); }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// 제품 Summary
+// ═══════════════════════════════════════════════════════════════════
+function renderProducts(list) {
+  const arr = Array.isArray(list) ? list : [list];
+  document.getElementById('p-tbody').innerHTML = arr.map(p => `
+    <tr>
+      <td>${p.productId}</td>
+      <td>${p.name ?? '-'}</td>
+      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.description ?? '-'}</td>
+      <td style="text-align:right">${fmtPrice(p.price)}</td>
+      <td style="text-align:right">${p.stock ?? '-'}</td>
+      <td>${evBadge(p.eventType)}</td>
+      <td>${fmt(p.sourceCreatedAt)}</td>
+      <td>${fmt(p.consumedAt)}</td>
+    </tr>`).join('');
+  document.getElementById('p-count').textContent = arr.length + ' 건';
+  document.getElementById('p-refreshed').textContent = '최종: ' + nowStr();
+  setMsg('p-msg', '');
+}
+
+async function productLoadAll() {
+  try { renderProducts(await apiFetch('/products')); }
+  catch(e) { setMsg('p-msg', '조회 실패: ' + e.message); }
+}
+
+async function productSearch() {
+  const id = document.getElementById('p-search-id').value.trim();
+  try {
+    renderProducts(id ? await apiFetch('/products/' + id) : await apiFetch('/products'));
+  } catch(e) { setMsg('p-msg', '조회 실패: ' + e.message); }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// 주문 Summary
+// ═══════════════════════════════════════════════════════════════════
+function renderOrders(list) {
+  const arr = Array.isArray(list) ? list : [list];
+  document.getElementById('o-tbody').innerHTML = arr.map(o => `
+    <tr>
+      <td>${o.orderId}</td>
+      <td>${o.orderNumber ?? '-'}</td>
+      <td>${o.userId ?? '-'}</td>
+      <td>${stBadge(o.status)}</td>
+      <td style="text-align:right">${fmtPrice(o.totalAmount)}</td>
+      <td>${evBadge(o.eventType)}</td>
+      <td>${fmt(o.sourceCreatedAt)}</td>
+      <td>${fmt(o.consumedAt)}</td>
+    </tr>`).join('');
+  document.getElementById('o-count').textContent = arr.length + ' 건';
+  document.getElementById('o-refreshed').textContent = '최종: ' + nowStr();
+  setMsg('o-msg', '');
+}
+
+async function orderLoadAll() {
+  try { renderOrders(await apiFetch('/orders')); }
+  catch(e) { setMsg('o-msg', '조회 실패: ' + e.message); }
+}
+
+async function orderSearch() {
+  const id     = document.getElementById('o-search-id').value.trim();
+  const userId = document.getElementById('o-search-user-id').value.trim();
+  try {
+    if (id)          renderOrders(await apiFetch('/orders/' + id));
+    else if (userId) renderOrders(await apiFetch('/orders/user/' + userId));
+    else             renderOrders(await apiFetch('/orders'));
+  } catch(e) { setMsg('o-msg', '조회 실패: ' + e.message); }
+}
+
+// ─────────────────────────────────────────
+// 초기 로드
+// ─────────────────────────────────────────
+userLoadAll();
+
+/*]]>*/
+</script>
+</body>
+</html>
