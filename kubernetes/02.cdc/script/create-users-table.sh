@@ -4,7 +4,7 @@
 # 사용법: ./create-users-table.sh
 
 NAMESPACE="kafka"
-POD="mariadb-1"
+POD="mariadb-1-0"
 CONTAINER="mariadb"
 DB_USER="skala"
 DB_PASSWORD=$(kubectl exec -n $NAMESPACE $POD -c $CONTAINER -- cat /opt/bitnami/mariadb/secrets/mariadb-password 2>/dev/null || echo 'Skala25a!23$')

@@ -6,7 +6,7 @@
 set -e
 
 NAMESPACE="kafka"
-POD="mariadb-1"
+POD="mariadb-1-0"
 CONTAINER="mariadb"
 DB_USER="root"
 DB_PASSWORD="Skala25a!23\$"
@@ -130,12 +130,12 @@ echo ""
 
 kubectl exec -n $NAMESPACE $POD -c $CONTAINER -- \
     mysql -u $DB_USER -p"$DB_PASSWORD" cloud -e "
-    SELECT 
+    SELECT
         table_name as '테이블명',
         table_rows as '레코드 수',
         ROUND(data_length / 1024 / 1024, 2) as '크기(MB)'
-    FROM information_schema.tables 
-    WHERE table_schema = 'cloud' 
+    FROM information_schema.tables
+    WHERE table_schema = 'cloud'
     ORDER BY table_name;
 " 2>/dev/null | grep -v "mysql: Deprecated" || true
 

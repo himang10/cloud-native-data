@@ -8,7 +8,7 @@
 set -e
 
 NAMESPACE="kafka"
-POD="mariadb-1"
+POD="mariadb-1-0"
 CONTAINER="mariadb"
 DB_USER="skala"
 # 비밀번호는 Secret 파일에서 읽기 (특수문자 이스케이프 문제 방지)
@@ -106,7 +106,7 @@ case $OPERATION in
         echo ""
         echo " $COUNTER 개의 레코드 DELETE 완료"
         ;;
-        
+
     *)
         echo " 잘못된 작업: $OPERATION"
         echo ""
